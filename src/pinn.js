@@ -8,6 +8,7 @@
 export const CONFIG = {
   ENABLE_PINN_PHEROMONE: true,
   ENABLE_PINN_BATTERY: true,
+  ENABLE_PINN_THERMAL: true,
 };
 
 // Physics defaults (matching trained PINN solution)
@@ -25,6 +26,14 @@ let batteryPhysics = {
     Sentinel: 0.011,
     default: 0.022,
   },
+};
+
+let thermalPhysics = {
+  k_debris: 0.045,
+  k_biological: 0.001,
+  T_ambient: 0.15,
+  cooling_half_life_ticks: 75,
+  persistence_threshold: 0.65,
 };
 
 let fetched = false;
@@ -51,6 +60,16 @@ export async function initPINN() {
     }
   } catch (e) {
     console.info('ℹ️ [PINN] Using offline Battery ODE calibration');
+  }
+
+  try {
+    const resThermal = await fetch('/api/pinn/thermal');
+    if (resThermal.ok) {
+      thermalPhysics = await resThermal.json();
+      console.log('🌡️ [PINN] Thermal Newtonian Cooling & Homeostasis ODE loaded:', thermalPhysics);
+    }
+  } catch (e) {
+    console.info('ℹ️ [PINN] Using offline Thermal ODE calibration');
   }
 }
 
@@ -87,3 +106,37 @@ export function getPINNBatteryDrain(role) {
     0.022
   );
 }
+
+/**
+ * Compute PINN thermal dissipation / persistence over elapsed observation ticks.
+ * For inanimate debris, heat decays according to Newton's Law of Cooling ODE:
+ *   T(t) = T_ambient + (T0 - T_ambient) * exp(-k_debris * t)
+ * For biological survivors, metabolic homeostasis maintains constant thermal signature:
+ *   T(t) ≈ T0
+ *
+ * @param {boolean} isBiological True if survivor, false if inanimate debris
+ * @param {number} elapsedTicks Ticks elapsed since first observed
+ * @param {number} initialThermal Initial normalized thermal reading [0, 1]
+ * @returns {number} Decayed/persistent thermal confidence [0, 1]
+ */
+export function getPINNThermalReading(isBiological, elapsedTicks = 0, initialThermal = 0.82) {
+  if (!CONFIG.ENABLE_PINN_THERMAL) {
+    return initialThermal;
+  }
+  const T_ambient = thermalPhysics.T_ambient ?? 0.15;
+  const k = isBiological
+    ? (thermalPhysics.k_biological ?? 0.001)
+    : (thermalPhysics.k_debris ?? 0.045);
+
+  // Analytical solution from trained Thermal PINN ODE
+  const cooled = T_ambient + (initialThermal - T_ambient) * Math.exp(-k * (elapsedTicks * 0.15));
+  return Math.min(1.0, Math.max(0.0, cooled));
+}
+
+/**
+ * Get current thermal physics parameters.
+ */
+export function getThermalPhysics() {
+  return thermalPhysics;
+}
+

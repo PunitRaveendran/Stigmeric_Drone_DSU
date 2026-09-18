@@ -335,6 +335,22 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(data, indent=2).encode())
             return
 
+        if parsed.path == '/api/pinn/thermal':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            data = PINN_CALIB.get("thermal", {
+                "k_debris": 0.045,
+                "k_biological": 0.001,
+                "T_ambient": 0.15,
+                "cooling_half_life_ticks": 75,
+                "persistence_threshold": 0.65,
+                "description": "Newtonian Thermal Cooling & Homeostatic Biological PINN"
+            })
+            self.wfile.write(json.dumps(data, indent=2).encode())
+            return
+
         return super().do_GET()
 
     def do_POST(self):
