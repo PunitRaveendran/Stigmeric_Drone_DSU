@@ -43,12 +43,33 @@ export class Swarm {
         quarantinedCount: 0,
         defenseActive: true,
       },
+      // Multi-Agent Debate Tracking
+      debateStats: {
+        proposals: 0,
+        agrees: 0,
+        rejects: 0,
+        consensusConfirmed: 0,
+      },
+      // NOAA Agent Negotiation Tracking
+      nooaStats: {
+        accessCount: 0,
+        successCount: 0,
+        lastDecision: 'IDLE',
+      },
+      // Relay Mesh Network Stats
+      relayStats: {
+        activeRelays: 0,
+        packetsRelayed: 0,
+      },
     };
 
     // ═══ CYBER-PHYSICAL SECURITY & BYZANTINE FAULT TOLERANCE ═════════════════
     this.byzantineDefenseEnabled = true;
     this.quarantinedDrones = new Set();
     this.securityStats = this.stats.securityStats;
+    this.debateStats = this.stats.debateStats;
+    this.nooaStats = this.stats.nooaStats;
+    this.relayStats = this.stats.relayStats;
 
     // Zone presence — how many drones are currently in each zone type
     // Used by the narrative panel to show "X drones near SURVIVOR zone"
@@ -98,6 +119,7 @@ export class Swarm {
     }
     if (!target) return;
     target.isRogue = true;
+    target.spoofTicks = 0;
     this.securityStats.rogueCount = this.drones.filter(d => d.isRogue).length;
     this._addEvent('🔴', `[SECURITY ALERT] Drone #${target.id} (${target.callsign}) COMPROMISED! Injected with Byzantine exploit. Broadcasting forged ghost targets.`);
   }
@@ -239,9 +261,27 @@ export class Swarm {
         quarantinedCount: 0,
         defenseActive: this.byzantineDefenseEnabled,
       },
+      debateStats: {
+        proposals: 0,
+        agrees: 0,
+        rejects: 0,
+        consensusConfirmed: 0,
+      },
+      nooaStats: {
+        accessCount: 0,
+        successCount: 0,
+        lastDecision: 'IDLE',
+      },
+      relayStats: {
+        activeRelays: 0,
+        packetsRelayed: 0,
+      },
     };
     this.quarantinedDrones.clear();
     this.securityStats = this.stats.securityStats;
+    this.debateStats = this.stats.debateStats;
+    this.nooaStats = this.stats.nooaStats;
+    this.relayStats = this.stats.relayStats;
     this._activeNOOASectors.clear();
     this._nooaInFlightCount = 0;
     this.field.reset();
@@ -448,14 +488,16 @@ export class Swarm {
 
       // ═══ BYZANTINE FAULT TOLERANCE: Blacklist Quarantine ═══
       if (this.byzantineDefenseEnabled && sender.isQuarantined) {
+        this.securityStats.attacksAttempted += sender.outbox.length;
         this.securityStats.attacksBlocked += sender.outbox.length;
         sender.outbox = [];
         continue;
       }
 
       for (const msg of sender.outbox) {
-        // Track attack metrics
-        if (sender.isRogue || msg.isForged) {
+        // Track attack metrics: forged candidate proposals or rogue spoofing
+        const isMalicious = msg.isForged || (sender.isRogue && (msg.type === 'CANDIDATE_PROPOSAL' || msg.confidence >= 0.70));
+        if (isMalicious) {
           this.securityStats.attacksAttempted++;
         }
 
@@ -464,8 +506,8 @@ export class Swarm {
           const actualType = this.sensors.scenario.getCellType(msg.col, msg.row);
           const isRealSurvivor = (actualType === 'SURVIVOR');
 
-          // Adversarial check: claiming high confidence at an empty/rubble/hazard cell
-          if (!isRealSurvivor && (msg.confidence >= 0.70 || msg.isForged)) {
+          // Adversarial check: forged Byzantine payload or claiming high confidence at a non-survivor cell
+          if (msg.isForged || (!isRealSurvivor && msg.confidence >= 0.70)) {
             sender.securityViolations = (sender.securityViolations || 0) + 1;
 
             // Multi-agent peer trust slashing across all honest peers
@@ -491,6 +533,13 @@ export class Swarm {
         }
 
         // Deliver to all drones within radio range
+        if (msg.type === 'CANDIDATE_PROPOSAL') {
+          this.debateStats.proposals++;
+        }
+        if (sender.role === 'RELAY') {
+          this.relayStats.packetsRelayed++;
+        }
+
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
           // Self-healing: probabilistic link quality gate replaces hard distance check
@@ -565,6 +614,11 @@ export class Swarm {
 
         // Log debate votes and consensus to event feed
         if (msg.type === 'VOTE_CAST') {
+          if (msg.vote === 'AGREE') {
+            this.debateStats.agrees++;
+          } else if (msg.vote === 'REJECT') {
+            this.debateStats.rejects++;
+          }
           const emoji = msg.vote === 'AGREE' ? '✅ YES' : '❌ NO';
           const headingDeg = Math.round((msg.heading * 180 / Math.PI + 360) % 360);
           const debateKey2 = `vote-${msg.callsign}-${msg.targetCol},${msg.targetRow}`;
@@ -576,6 +630,7 @@ export class Swarm {
             this._addEvent(emoji, `Agent ${msg.callsign} [${headingDeg}° angle] votes ${msg.vote} @ (${msg.targetCol},${msg.targetRow}): "${reasoning}"`);
           }
         } else if (msg.type === 'CONSENSUS_CONFIRMED') {
+          this.debateStats.consensusConfirmed++;
           const debateKey3 = `consensus-${msg.col},${msg.row}`;
           if (!this._debateLogThrottle.has(debateKey3)) {
             this._debateLogThrottle.add(debateKey3);
@@ -592,6 +647,9 @@ export class Swarm {
       }
       sender.outbox = [];
     }
+
+    // Update active relays count
+    this.relayStats.activeRelays = this.drones.filter(d => d.role === 'RELAY').length;
 
     // Process vote messages received in second pass
     for (const drone of this.drones) {
@@ -885,6 +943,7 @@ export class Swarm {
     if (!this._activeNOOASectors) this._activeNOOASectors = new Set();
     this._activeNOOASectors.add(sectorKey);
     this._nooaInFlightCount = (this._nooaInFlightCount || 0) + 1;
+    this.nooaStats.accessCount = (this.nooaStats.accessCount || 0) + 1;
 
     const peerAngles = localPeers.map(p => p.heading);
     const controller = new AbortController();
@@ -912,6 +971,8 @@ export class Swarm {
         setTimeout(() => this._activeNOOASectors.delete(sectorKey), 3000); // 3s cooldown
 
         if (data && data.is_valid && data.decision) {
+          this.nooaStats.successCount = (this.nooaStats.successCount || 0) + 1;
+          this.nooaStats.lastDecision = data.decision;
           if (data.decision === 'CONFIRM') {
             this._addEvent('🤖', `[NOOA NEGOTIATOR] ${data.reasoning}`);
             this.field.deposit(col, row, 0.40, proposer.id, data.confidence, 0.05);
