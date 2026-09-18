@@ -298,6 +298,7 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
 
 class DualStackHTTPServer(HTTPServer):
     address_family = socket.AF_INET6
+    allow_reuse_address = True
 
     def server_bind(self):
         try:
