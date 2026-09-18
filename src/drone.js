@@ -163,12 +163,55 @@ export class Drone {
     // Debate State: tracks votes this agent has cast and received for candidate cells
     this.votesReceived = new Map(); // "col,row" → [{ fromId, vote: 'AGREE'|'REJECT', confidence, angle }]
     this.votesCast = new Set();     // "col,row" keys this agent has already voted on
-
     // Agent callsign for readable debate logs
     const callsigns = ['ALPHA','BRAVO','CHARLIE','DELTA','ECHO','FOXTROT','GOLF','HOTEL',
                         'INDIA','JULIET','KILO','LIMA','MIKE','NOVEMBER','OSCAR','PAPA'];
     this.callsign = callsigns[id % callsigns.length] + '-' + Math.floor(id / callsigns.length);
+
+    // ═══ CYBER-PHYSICAL SECURITY & BYZANTINE FAULT TOLERANCE ═════════════════
+    // State for adversary injection, mutual peer trust scoring, and BFT quarantine
+    this.isRogue = false;          // True if compromised/injected with Byzantine fault
+    this.isQuarantined = false;    // True if blacklisted by multi-agent swarm consensus
+    this.peerTrust = new Map();    // Peer ID -> trust score in [0.0, 1.0] (starts at 1.0)
+    this.spoofTicks = 0;           // Timer for rogue spoofed broadcasts
+    this.securityViolations = 0;   // Tracked adversarial infractions
   }
+
+  /**
+   * Get this drone's trust rating for a peer agent.
+   * @param {number} peerId
+   * @returns {number} Trust score in [0.0, 1.0] (defaults to 1.0)
+   */
+  getPeerTrust(peerId) {
+    return this.peerTrust.has(peerId) ? this.peerTrust.get(peerId) : 1.0;
+  }
+
+  /**
+   * Penalize a peer's trust rating following detected Byzantine deviation or sensor mismatch.
+   * @param {number} peerId
+   * @param {number} penalty
+   * @returns {number} updated trust
+   */
+  penalizePeer(peerId, penalty = 0.50) {
+    const curr = this.getPeerTrust(peerId);
+    const updated = Math.max(0.0, curr - penalty);
+    this.peerTrust.set(peerId, updated);
+    return updated;
+  }
+
+  /**
+   * Reward a peer's trust rating following verified corroboration.
+   * @param {number} peerId
+   * @param {number} reward
+   * @returns {number} updated trust
+   */
+  rewardPeer(peerId, reward = 0.05) {
+    const curr = this.getPeerTrust(peerId);
+    const updated = Math.min(1.0, curr + reward);
+    this.peerTrust.set(peerId, updated);
+    return updated;
+  }
+
 
   // ─── Dual-Axis Role Determination ──────────────────────────────────────────
 
@@ -610,9 +653,11 @@ export class Drone {
    * @param {import('./field.js').PheromoneField} field
    */
   deposit(field) {
+    if (this.isQuarantined) return; // Swarm isolates and rejects quarantined drone deposits
     if (this.role === 'SENTINEL') return; // power conservation: no pheromone deposit
     const params = REGIME_PARAMS[this.regime] || REGIME_PARAMS.SPREAD;
     let amount = params.depositAmount * (0.3 + 0.7 * this.confidence);
+    if (this.isRogue) amount = 0.95; // Rogue drone attempts pheromone poisoning
     if (this.role === 'RELAY') amount *= 1.6; // RELAY drones boost pheromone as signal relay beacon
     if (this.isSentinel) amount *= 1.8; // Sentinel beacon trail
     // Self-healing: STIGMERGIC mode compensates for lost radio with stronger chemical trail
@@ -647,8 +692,41 @@ export class Drone {
   broadcastObservation(tick) {
     this.outbox = []; // clear previous outbox
 
+    // Byzantine Defense: Quarantined drone is blacklisted from radio broadcasts
+    if (this.isQuarantined) return;
+
     // Self-healing: STIGMERGIC mode — radio channel unavailable, rely on pheromone only
     if (this.decisionMode === 'STIGMERGIC') return;
+
+    // ═══ ROGUE / BYZANTINE ATTACK INJECTION ═══
+    // If compromised, periodically inject a forged high-confidence proposal at an empty sector
+    if (this.isRogue) {
+      this.spoofTicks++;
+      if (this.spoofTicks % 25 === 0) {
+        const spoofCol = Math.max(1, Math.min(20, (this.col + 7) % 21));
+        const spoofRow = Math.max(1, Math.min(16, (this.row + 5) % 17));
+        this.lastDebateSpeech = {
+          type: 'CANDIDATE_PROPOSAL',
+          vote: 'PROPOSAL',
+          text: `⚠️ [SPOOF] FAKE SURVIVOR @ (${spoofCol},${spoofRow}) C=98%!`,
+          callsign: this.callsign,
+          tick,
+        };
+        this.outbox.push({
+          type: 'CANDIDATE_PROPOSAL',
+          fromId: this.id,
+          callsign: this.callsign,
+          col: spoofCol,
+          row: spoofRow,
+          confidence: 0.98,
+          isForged: true,
+          readings: { camera: 0.96, audio: 0.92, thermal: 0.95, gas: 0.12 },
+          heading: this._headingAngle,
+          tick,
+        });
+        return;
+      }
+    }
 
     // Broadcast explored sector status every 15 ticks so peer agents know this area is mapped
     if (tick % 15 === 0) {
@@ -721,21 +799,30 @@ export class Drone {
    * Each message is evaluated independently — this agent forms its OWN opinion.
    */
   receiveMessages() {
+    // Quarantined agents cannot process or participate in consensus
+    if (this.isQuarantined) {
+      this.inbox = [];
+      return;
+    }
     // Self-healing: STIGMERGIC mode — skip radio message processing entirely
     if (this.decisionMode === 'STIGMERGIC') {
       this.inbox = [];
       return;
     }
     for (const msg of this.inbox) {
+      // Drop messages from untrusted peers (Trust < 0.35)
+      const senderTrust = this.getPeerTrust(msg.fromId);
+      if (senderTrust < 0.35) continue;
+
       if (msg.type === 'SECTOR_EXPLORED') {
         // Peer agent informed us that sector (msg.col, msg.row) is already mapped
         this.knownExploredSectors.add(`${msg.col},${msg.row}`);
       } else if (msg.type === 'CANDIDATE_PROPOSAL') {
-        // Store peer's observation in our beliefs as external evidence
+        // Store peer's observation in our beliefs, weighted by peer trust
         const key = `${msg.col},${msg.row}`;
         if (!this.beliefs.has(key)) {
           this.beliefs.set(key, {
-            confidence: msg.confidence * 0.6, // discount peer evidence (we haven't seen it ourselves)
+            confidence: msg.confidence * 0.6 * senderTrust,
             readings: msg.readings,
             tick: msg.tick,
             visitCount: 0,
@@ -801,11 +888,13 @@ export class Drone {
   }
 
   /**
-   * Get the CSS color for this drone based on its current regime & Sentinel status.
+   * Get the CSS color for this drone based on its security status, regime & Sentinel status.
    */
   get color() {
+    if (this.isQuarantined) return '#9d4edd'; // Violet — Quarantined / Isolated
+    if (this.isRogue) return '#ff0055';       // Crimson Red — Compromised / Rogue
     if (this.decisionMode === 'STIGMERGIC') return '#ff9500'; // Amber — degraded comms
-    if (this.isSentinel) return '#00ffaa'; // Bright cyan/green beacon for sentinel drone
+    if (this.isSentinel) return '#00ffaa';    // Bright cyan/green beacon for sentinel drone
     switch (this.regime) {
       case 'SOLIDIFY': return '#ff4d6d';  // hot red — committed
       case 'CONVERGE': return '#ffd60a';  // yellow — converging
@@ -817,7 +906,9 @@ export class Drone {
    * Get the color for this drone's glow/aura as an [R, G, B] array.
    */
   get glowRgb() {
-    if (this.decisionMode === 'STIGMERGIC') return [255, 149, 0]; // Amber glow — degraded comms
+    if (this.isQuarantined) return [157, 78, 221];
+    if (this.isRogue) return [255, 0, 85];
+    if (this.decisionMode === 'STIGMERGIC') return [255, 149, 0]; // Amber glow
     if (this.isSentinel) return [0, 255, 170];
     switch (this.regime) {
       case 'SOLIDIFY': return [255, 77, 109];

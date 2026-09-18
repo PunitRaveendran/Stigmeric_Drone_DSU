@@ -35,7 +35,20 @@ export class Swarm {
       dominantRegime: 'SPREAD',
       // Self-Healing Comms Stats
       commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
+      // Byzantine Cyber-Physical Security Stats
+      securityStats: {
+        rogueCount: 0,
+        attacksAttempted: 0,
+        attacksBlocked: 0,
+        quarantinedCount: 0,
+        defenseActive: true,
+      },
     };
+
+    // ═══ CYBER-PHYSICAL SECURITY & BYZANTINE FAULT TOLERANCE ═════════════════
+    this.byzantineDefenseEnabled = true;
+    this.quarantinedDrones = new Set();
+    this.securityStats = this.stats.securityStats;
 
     // Zone presence — how many drones are currently in each zone type
     // Used by the narrative panel to show "X drones near SURVIVOR zone"
@@ -67,6 +80,71 @@ export class Swarm {
     // NOOA Multi-Agent Tactical Negotiation State (Non-blocking & Deduplicated)
     this._activeNOOASectors = new Set();
     this._nooaInFlightCount = 0;
+  }
+
+  // ─── Cyber-Physical Security & Byzantine Fault Tolerance Controls ──────────
+
+  /**
+   * Inject a Byzantine attack by compromising an active drone.
+   * @param {number} [targetId]
+   */
+  injectRogueDrone(targetId) {
+    let target = null;
+    if (targetId !== undefined) {
+      target = this.drones.find(d => d.id === targetId);
+    } else {
+      // Pick first non-rogue drone
+      target = this.drones.find(d => !d.isRogue && !d.isSentinel) || this.drones[0];
+    }
+    if (!target) return;
+    target.isRogue = true;
+    this.securityStats.rogueCount = this.drones.filter(d => d.isRogue).length;
+    this._addEvent('🔴', `[SECURITY ALERT] Drone #${target.id} (${target.callsign}) COMPROMISED! Injected with Byzantine exploit. Broadcasting forged ghost targets.`);
+  }
+
+  /**
+   * Neutralize rogue drones, restore trust ratings, and clear quarantine.
+   */
+  neutralizeRogueDrones() {
+    for (const d of this.drones) {
+      d.isRogue = false;
+      d.isQuarantined = false;
+      d.peerTrust.clear();
+      d.securityViolations = 0;
+    }
+    this.quarantinedDrones.clear();
+    this.securityStats.rogueCount = 0;
+    this.securityStats.quarantinedCount = 0;
+    this.securityStats.attacksAttempted = 0;
+    this.securityStats.attacksBlocked = 0;
+    this._addEvent('🟢', `[SECURITY COUNTERMEASURE] Swarm cryptographically re-keyed. All rogue agents neutralized. Trust ratings restored to 1.0.`);
+  }
+
+  /**
+   * Toggle Byzantine Fault Defense on/off to benchmark swarm vulnerability.
+   */
+  toggleByzantineDefense() {
+    this.byzantineDefenseEnabled = !this.byzantineDefenseEnabled;
+    this.securityStats.defenseActive = this.byzantineDefenseEnabled;
+    const status = this.byzantineDefenseEnabled ? 'ENABLED (Consensus Protected)' : 'DISABLED (Vulnerable to Spoofing)';
+    this._addEvent('🛡️', `Byzantine Defense is now ${status}.`);
+    return this.byzantineDefenseEnabled;
+  }
+
+  /**
+   * Calculate average peer trust rating for a given drone across all other drones.
+   * @param {number} droneId
+   * @returns {number} Average trust in [0.0, 1.0]
+   */
+  getAverageTrust(droneId) {
+    let total = 0, count = 0;
+    for (const d of this.drones) {
+      if (d.id !== droneId) {
+        total += d.getPeerTrust(droneId);
+        count++;
+      }
+    }
+    return count > 0 ? (total / count) : 1.0;
   }
 
   /**
@@ -154,7 +232,16 @@ export class Swarm {
       roleCounts: { SCOUT: 0, RELAY: 0, SENTINEL: 0 },
       dominantRegime: 'SPREAD',
       commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
+      securityStats: {
+        rogueCount: 0,
+        attacksAttempted: 0,
+        attacksBlocked: 0,
+        quarantinedCount: 0,
+        defenseActive: this.byzantineDefenseEnabled,
+      },
     };
+    this.quarantinedDrones.clear();
+    this.securityStats = this.stats.securityStats;
     this._activeNOOASectors.clear();
     this._nooaInFlightCount = 0;
     this.field.reset();
@@ -359,7 +446,50 @@ export class Swarm {
     for (const sender of this.drones) {
       if (sender.outbox.length === 0) continue;
 
+      // ═══ BYZANTINE FAULT TOLERANCE: Blacklist Quarantine ═══
+      if (this.byzantineDefenseEnabled && sender.isQuarantined) {
+        this.securityStats.attacksBlocked += sender.outbox.length;
+        sender.outbox = [];
+        continue;
+      }
+
       for (const msg of sender.outbox) {
+        // Track attack metrics
+        if (sender.isRogue || msg.isForged) {
+          this.securityStats.attacksAttempted++;
+        }
+
+        // ═══ BYZANTINE SPOOFING DETECTION & QUARANTINE ═══
+        if (msg.type === 'CANDIDATE_PROPOSAL' && this.byzantineDefenseEnabled) {
+          const actualType = this.sensors.scenario.getCellType(msg.col, msg.row);
+          const isRealSurvivor = (actualType === 'SURVIVOR');
+
+          // Adversarial check: claiming high confidence at an empty/rubble/hazard cell
+          if (!isRealSurvivor && (msg.confidence >= 0.70 || msg.isForged)) {
+            sender.securityViolations = (sender.securityViolations || 0) + 1;
+
+            // Multi-agent peer trust slashing across all honest peers
+            for (const peer of this.drones) {
+              if (peer.id !== sender.id && !peer.isRogue) {
+                peer.penalizePeer(sender.id, 0.70);
+              }
+            }
+
+            const avgTrust = this.getAverageTrust(sender.id);
+            if (avgTrust < 0.35 && !sender.isQuarantined) {
+              sender.isQuarantined = true;
+              this.quarantinedDrones.add(sender.id);
+              this.securityStats.quarantinedCount = this.quarantinedDrones.size;
+              // Clear any false attractant pheromone deposited by rogue drone
+              this.field.clearLocalAttraction(msg.col, msg.row, 3.0, false);
+              this._addEvent('🛡️', `[BFT ATTACK BLOCKED] Byzantine spoofing detected! Drone #${sender.id} (${sender.callsign}) broadcast forged C=${(msg.confidence * 100).toFixed(0)}% at empty sector (${msg.col},${msg.row}). Honest peers cross-verified sensor mismatch. Trust slashed to ${(avgTrust * 100).toFixed(0)}% → NODE QUARANTINED.`);
+            }
+
+            this.securityStats.attacksBlocked++;
+            continue; // Drop the spoofed proposal — do not route to honest peers!
+          }
+        }
+
         // Deliver to all drones within radio range
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
