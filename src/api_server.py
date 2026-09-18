@@ -268,6 +268,7 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/nooa/negotiate':
             try:
                 from urllib.parse import parse_qs
+                import asyncio
                 try:
                     from src.nooa_agent import SARSwarmAgent, SensorReading
                 except ImportError:

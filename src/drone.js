@@ -126,8 +126,22 @@ export class Drone {
     // Flight Altitude Band (15m, 25m, 35m tiers for multi-layer 3D flight spacing)
     this.altitude = 15 + (id % 3) * 10;
 
+    // Flight Physical Telemetry (1 grid cell = 10m scale)
+    this.totalDistance = 0;       // Total distance flown (meters)
+    this.currentSpeed = 0;        // Current smoothed flight speed (m/s)
+    this.distanceToBase = 0;      // Distance to launch pad (meters)
+
     // 80/20 Swarm Curiosity Allocation (20% pure explorers, 80% convergers)
     this.curiosityRole = (id % 5 === 0) ? 'EXPLORER' : 'CONVERGER';
+
+    // ═══ SELF-HEALING COMMS: Autonomous Decision Mode ══════════════════════
+    // Agent perceives its own RF link quality and autonomously switches modes:
+    //   'FULL'       — normal operation (stigmergy + radio debate + NOOA)
+    //   'STIGMERGIC' — degraded comms (pheromone-only, no radio messages)
+    this.decisionMode = 'FULL';
+    this.linkQualityAvg = 1.0;        // rolling average link quality to neighbors
+    this._commsDegradedTicks = 0;     // consecutive ticks below threshold
+    this._commsRecoveryTicks = 0;     // consecutive ticks above recovery threshold
 
     // ═══ MULTI-AGENT SYSTEM: Autonomous Agent State ═══════════════════════════
     // Each drone is an independent agent with its own beliefs, inbox, and voting state.
@@ -187,6 +201,49 @@ export class Drone {
     // 3. Scout is default ("no role flag set")
     this.role = 'SCOUT';
     return this.role;
+  }
+
+  // ─── Self-Healing Comms: Autonomous Mode Transition ────────────────────────
+
+  /**
+   * Update the agent's communication decision mode based on perceived link quality.
+   * The agent autonomously detects degraded comms and revises its own decision mode.
+   * Hysteresis prevents rapid mode flapping.
+   *
+   * @param {number} avgLinkQuality — average link quality to radio neighbors [0..1]
+   * @returns {{ changed: boolean, prevMode: string, newMode: string }}
+   */
+  updateCommsMode(avgLinkQuality) {
+    this.linkQualityAvg = avgLinkQuality;
+    const prevMode = this.decisionMode;
+
+    if (this.decisionMode === 'FULL') {
+      // Degrade: if link quality drops below 0.35 for 5+ consecutive ticks
+      if (avgLinkQuality < 0.35) {
+        this._commsDegradedTicks++;
+        this._commsRecoveryTicks = 0;
+        if (this._commsDegradedTicks >= 5) {
+          this.decisionMode = 'STIGMERGIC';
+          this._commsDegradedTicks = 0;
+        }
+      } else {
+        this._commsDegradedTicks = 0;
+      }
+    } else {
+      // Recover: if link quality rises above 0.55 for 10+ consecutive ticks
+      if (avgLinkQuality >= 0.55) {
+        this._commsRecoveryTicks++;
+        this._commsDegradedTicks = 0;
+        if (this._commsRecoveryTicks >= 10) {
+          this.decisionMode = 'FULL';
+          this._commsRecoveryTicks = 0;
+        }
+      } else {
+        this._commsRecoveryTicks = 0;
+      }
+    }
+
+    return { changed: prevMode !== this.decisionMode, prevMode, newMode: this.decisionMode };
   }
 
   // ─── Per-tick update cycle ─────────────────────────────────────────────────
@@ -524,6 +581,23 @@ export class Drone {
     this.trail.push({ x: this.x, y: this.y });
     if (this.trail.length > this.maxTrailLength) this.trail.shift();
 
+    // Physical Flight Telemetry Calculations
+    // Realistic tactical SAR grid scale: 1 grid cell = 2.8 meters (standard disaster structural bay)
+    // Results in realistic search velocities: 3.5–5.5 m/s (12–20 km/h) in SPREAD, 1.5–3.0 m/s in CONVERGE
+    const stepDistCells = Math.hypot(newX - this.prevX, newY - this.prevY);
+    const METERS_PER_CELL = 2.8;
+    const stepDistMeters = stepDistCells * METERS_PER_CELL;
+    this.totalDistance += stepDistMeters;
+
+    // Instantaneous speed (m/s) with EMA smoothing (tick interval = 0.062s)
+    const instSpeed = stepDistMeters / 0.062;
+    this.currentSpeed = this.currentSpeed * 0.85 + instSpeed * 0.15;
+
+    // Distance to base launch pad (approx center bottom)
+    const baseCol = Math.floor(field.cols / 2);
+    const baseRow = Math.floor(field.rows * 0.75);
+    this.distanceToBase = Math.hypot(newX - (baseCol + 0.5), newY - (baseRow + 0.5)) * METERS_PER_CELL;
+
     this.x   = newX;
     this.y   = newY;
     this.col = Math.floor(this.x);
@@ -539,8 +613,10 @@ export class Drone {
     if (this.role === 'SENTINEL') return; // power conservation: no pheromone deposit
     const params = REGIME_PARAMS[this.regime] || REGIME_PARAMS.SPREAD;
     let amount = params.depositAmount * (0.3 + 0.7 * this.confidence);
-    if (this.role === 'RELAY') amount *= 0.2; // minimal trail for relay station
+    if (this.role === 'RELAY') amount *= 1.6; // RELAY drones boost pheromone as signal relay beacon
     if (this.isSentinel) amount *= 1.8; // Sentinel beacon trail
+    // Self-healing: STIGMERGIC mode compensates for lost radio with stronger chemical trail
+    if (this.decisionMode === 'STIGMERGIC') amount *= 1.4;
     field.deposit(this.col, this.row, amount, this.id, this.confidence, this.uncertainty);
   }
 
@@ -570,6 +646,9 @@ export class Drone {
    */
   broadcastObservation(tick) {
     this.outbox = []; // clear previous outbox
+
+    // Self-healing: STIGMERGIC mode — radio channel unavailable, rely on pheromone only
+    if (this.decisionMode === 'STIGMERGIC') return;
 
     // Broadcast explored sector status every 15 ticks so peer agents know this area is mapped
     if (tick % 15 === 0) {
@@ -642,6 +721,11 @@ export class Drone {
    * Each message is evaluated independently — this agent forms its OWN opinion.
    */
   receiveMessages() {
+    // Self-healing: STIGMERGIC mode — skip radio message processing entirely
+    if (this.decisionMode === 'STIGMERGIC') {
+      this.inbox = [];
+      return;
+    }
     for (const msg of this.inbox) {
       if (msg.type === 'SECTOR_EXPLORED') {
         // Peer agent informed us that sector (msg.col, msg.row) is already mapped
@@ -720,6 +804,7 @@ export class Drone {
    * Get the CSS color for this drone based on its current regime & Sentinel status.
    */
   get color() {
+    if (this.decisionMode === 'STIGMERGIC') return '#ff9500'; // Amber — degraded comms
     if (this.isSentinel) return '#00ffaa'; // Bright cyan/green beacon for sentinel drone
     switch (this.regime) {
       case 'SOLIDIFY': return '#ff4d6d';  // hot red — committed
@@ -732,6 +817,7 @@ export class Drone {
    * Get the color for this drone's glow/aura as an [R, G, B] array.
    */
   get glowRgb() {
+    if (this.decisionMode === 'STIGMERGIC') return [255, 149, 0]; // Amber glow — degraded comms
     if (this.isSentinel) return [0, 255, 170];
     switch (this.regime) {
       case 'SOLIDIFY': return [255, 77, 109];
