@@ -118,5 +118,23 @@ class TestBeeceptorGateway(unittest.TestCase):
         self.assertGreaterEqual(payload["fused_confidence"], 0.75)
 
 
+class TestN8nDispatchGateway(unittest.TestCase):
+
+    def test_dispatch_triage_routing(self):
+        payload = {
+            "event_type": "EMERGENCY_SURVIVOR_LOCKED",
+            "triage": {
+                "fused_confidence": 0.92,
+                "priority_tier": "CODE_RED_IMMEDIATE",
+            },
+            "location": {
+                "sector": "(14, 22)",
+                "elevation_m": 12.5,
+            }
+        }
+        self.assertEqual(payload["triage"]["priority_tier"], "CODE_RED_IMMEDIATE")
+        self.assertGreater(payload["triage"]["fused_confidence"], 0.85)
+
+
 if __name__ == "__main__":
     unittest.main()

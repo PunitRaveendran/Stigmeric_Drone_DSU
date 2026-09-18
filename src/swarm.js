@@ -11,6 +11,7 @@
 import { Drone } from './drone.js';
 import { getLinkQuality, shouldDeliver, getAvgLinkQuality, RADIO_RANGE } from './comms.js';
 import { beeceptor } from './beeceptor.js';
+import { n8nGateway } from './n8n.js';
 
 export class Swarm {
   /**
@@ -346,6 +347,19 @@ export class Swarm {
             confidence: drone.confidence.toFixed(3),
           });
           this._addEvent('🚨', `Rescue dispatch! Survivor confirmed at sector (${drone.col},${drone.row})`);
+
+          // Trigger Autonomous n8n First-Responder Dispatch Workflow
+          n8nGateway.triggerSARDispatch({
+            col: drone.col,
+            row: drone.row,
+            confidence: drone.confidence,
+            readings: drone.lastReadings,
+            leadAgent: drone.callsign,
+          }).then((res) => {
+            if (res && res.assigned_unit) {
+              this._addEvent('⚡', `[n8n DISPATCH] ${res.assigned_unit} en route to (${drone.col},${drone.row}) — ETA ${res.eta_minutes || 4.5}m`);
+            }
+          });
         }
       }
     }
