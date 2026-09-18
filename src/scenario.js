@@ -136,16 +136,16 @@ export class DisasterScenario {
       ];
 
       for (const t of targets) {
-        fillRect(grid, cols, CELL.SURVIVOR, t.col - 1, t.row - 1, t.col + 1, t.row + 1);
+        fillRect(grid, cols, CELL.SURVIVOR, t.col, t.row, t.col + 1, t.row + 1);
         this.survivors.push(t);
       }
 
-      // Decoys & Hazards
-      fillRect(grid, cols, CELL.HOT_DEBRIS, 13, 10, 15, 12);
-      fillRect(grid, cols, CELL.HOT_DEBRIS, 2, 2, 4, 3);
-      fillRect(grid, cols, CELL.WIND_NOISE, 1, 14, 3, 16);
-      fillRect(grid, cols, CELL.WIND_NOISE, 19, 2, 21, 4);
-      fillRect(grid, cols, CELL.HAZARD, 9, 1, 11, 2);
+      // Decoys & Hazards (compact 2x2 patches)
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 13, 10, 14, 11);
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 2, 2, 3, 3);
+      fillRect(grid, cols, CELL.WIND_NOISE, 1, 14, 2, 15);
+      fillRect(grid, cols, CELL.WIND_NOISE, 19, 2, 20, 3);
+      fillRect(grid, cols, CELL.HAZARD, 9, 1, 10, 2);
 
       this.structures.push({ c0: 2, r0: 2, c1: 7, r1: 6, label: 'SECTOR W-1' });
       this.structures.push({ c0: 14, r0: 2, c1: 19, r1: 6, label: 'SECTOR E-1' });
@@ -166,13 +166,13 @@ export class DisasterScenario {
       ];
 
       for (const t of targets) {
-        fillRect(grid, cols, CELL.SURVIVOR, t.col - 1, t.row - 1, t.col + 1, t.row + 1);
+        fillRect(grid, cols, CELL.SURVIVOR, t.col, t.row, t.col + 1, t.row + 1);
         this.survivors.push(t);
       }
 
-      fillRect(grid, cols, CELL.HOT_DEBRIS, 14, 11, 18, 15);
-      fillRect(grid, cols, CELL.WIND_NOISE, 2, 8, 5, 10);
-      fillRect(grid, cols, CELL.HAZARD, 9, 2, 11, 4);
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 14, 11, 15, 12);
+      fillRect(grid, cols, CELL.WIND_NOISE, 3, 8, 4, 9);
+      fillRect(grid, cols, CELL.HAZARD, 9, 2, 10, 3);
 
       this.structures.push({ c0: 2, r0: 2, c1: 7, r1: 6, label: 'SECTOR W-1' });
       this.structures.push({ c0: 14, r0: 2, c1: 19, r1: 6, label: 'SECTOR E-1' });
@@ -180,31 +180,31 @@ export class DisasterScenario {
       this.structures.push({ c0: 14, r0: 11, c1: 19, r1: 16, label: 'SECTOR E-2' });
 
     } else if (name === 'disaster-zone' || name === 'ambiguous') {
-      // 5 DISTINCT SURVIVORS across the disaster zone!
+      // 5 DISTINCT SURVIVORS across the disaster zone (compact 2x2 bounds)
       // 1. Survivor Alpha — Northeast Ruined Tower (Sector 16, 4)
-      fillRect(grid, cols, CELL.SURVIVOR, 15, 3, 17, 5);
+      fillRect(grid, cols, CELL.SURVIVOR, 15, 3, 16, 4);
       this.survivors.push({ id: 'ALPHA', name: 'Survivor Alpha', col: 16, row: 4, sector: 'NE TOWER SECTOR' });
 
       // 2. Survivor Bravo — Southwest Collapsed Complex (Sector 5, 13)
-      fillRect(grid, cols, CELL.SURVIVOR, 4, 12, 6, 14);
+      fillRect(grid, cols, CELL.SURVIVOR, 4, 12, 5, 13);
       this.survivors.push({ id: 'BRAVO', name: 'Survivor Bravo', col: 5, row: 13, sector: 'SW RUINS SECTOR' });
 
       // 3. Survivor Charlie — Northwest Hazard Perimeter (Sector 5, 4)
-      fillRect(grid, cols, CELL.SURVIVOR, 4, 3, 6, 5);
+      fillRect(grid, cols, CELL.SURVIVOR, 4, 3, 5, 4);
       this.survivors.push({ id: 'CHARLIE', name: 'Survivor Charlie', col: 5, row: 4, sector: 'NW STRUCTURAL GAP' });
 
       // 4. Survivor Delta — Southeast Vault Ruin (Sector 16, 13)
-      fillRect(grid, cols, CELL.SURVIVOR, 15, 12, 17, 14);
+      fillRect(grid, cols, CELL.SURVIVOR, 15, 12, 16, 13);
       this.survivors.push({ id: 'DELTA', name: 'Survivor Delta', col: 16, row: 13, sector: 'SE VAULT SECTOR' });
 
       // 5. Survivor Echo — Center Corridor Shelter (Sector 11, 9)
-      fillRect(grid, cols, CELL.SURVIVOR, 10, 8, 12, 10);
+      fillRect(grid, cols, CELL.SURVIVOR, 10, 8, 11, 9);
       this.survivors.push({ id: 'ECHO', name: 'Survivor Echo', col: 11, row: 9, sector: 'CENTER CORRIDOR' });
 
-      // Hazards & Thermal Debris (positioned in distinct non-overlapping sectors)
-      fillRect(grid, cols, CELL.HOT_DEBRIS, 14, 11, 18, 15);  // Orange: Fire Debris (SE)
-      fillRect(grid, cols, CELL.WIND_NOISE, 2, 8, 5, 10);      // Blue: Audio Echo Gap (West Sector)
-      fillRect(grid, cols, CELL.HAZARD, 9, 2, 11, 4);          // Purple: Gas Plume (North Sector)
+      // Hazards & Thermal Debris (compact 2x2 patches in distinct non-overlapping sectors)
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 14, 11, 15, 12);  // Orange: Fire Debris (SE)
+      fillRect(grid, cols, CELL.WIND_NOISE, 3, 8, 4, 9);       // Blue: Audio Echo Gap (West Sector)
+      fillRect(grid, cols, CELL.HAZARD, 9, 2, 10, 3);          // Purple: Gas Plume (North Sector)
 
       // Ruined structural building footprints
       this.structures.push({ c0: 2, r0: 2, c1: 7, r1: 6, label: 'SECTOR W-1' });
@@ -213,23 +213,23 @@ export class DisasterScenario {
       this.structures.push({ c0: 14, r0: 11, c1: 19, r1: 16, label: 'SECTOR E-2' });
 
     } else if (name === 'simple') {
-      // The single survivor (Target)
-      fillRect(grid, cols, CELL.SURVIVOR, 15, 3, 18, 6);
+      // The single survivor (compact 2x2 target)
+      fillRect(grid, cols, CELL.SURVIVOR, 15, 3, 16, 4);
       this.survivors.push({ id: 'ALPHA', name: 'Survivor Alpha', col: 16, row: 4, sector: 'SECTOR E-1' });
 
-      // Decoys and Hazards to demonstrate multi-modal sensor filtering
-      fillRect(grid, cols, CELL.HOT_DEBRIS, 3, 2, 7, 6);   // Top-left (Triggers Thermal only)
-      fillRect(grid, cols, CELL.WIND_NOISE, 3, 11, 7, 15); // Bottom-left (Triggers Audio only)
-      fillRect(grid, cols, CELL.HAZARD, 10, 7, 12, 9);     // Center (Triggers Gas only)
+      // Compact 2x2 Decoys and Hazards
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 4, 3, 5, 4);   // Top-left (Triggers Thermal only)
+      fillRect(grid, cols, CELL.WIND_NOISE, 4, 12, 5, 13); // Bottom-left (Triggers Audio only)
+      fillRect(grid, cols, CELL.HAZARD, 10, 7, 11, 8);     // Center (Triggers Gas only)
     } else if (name === 'multi-survivor') {
-      fillRect(grid, cols, CELL.SURVIVOR, 14, 2, 18, 5);
+      fillRect(grid, cols, CELL.SURVIVOR, 15, 2, 16, 3);
       this.survivors.push({ id: 'ALPHA', name: 'Survivor Alpha', col: 16, row: 3, sector: 'NORTH SECTOR' });
 
-      fillRect(grid, cols, CELL.SURVIVOR, 3, 11, 7, 14);
+      fillRect(grid, cols, CELL.SURVIVOR, 4, 11, 5, 12);
       this.survivors.push({ id: 'BRAVO', name: 'Survivor Bravo', col: 5, row: 12, sector: 'SOUTH SECTOR' });
 
-      fillRect(grid, cols, CELL.HOT_DEBRIS, 14, 11, 18, 15);
-      fillRect(grid, cols, CELL.WIND_NOISE, 3, 2, 7, 6);
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 14, 11, 15, 12);
+      fillRect(grid, cols, CELL.WIND_NOISE, 4, 3, 5, 4);
     }
   }
 
