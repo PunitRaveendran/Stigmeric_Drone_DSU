@@ -52,7 +52,7 @@ venv\Scripts\activate          # On Windows
 # source venv/bin/activate     # On macOS/Linux
 
 # Option B: Using Windows py launcher (targeting Python 3.11 or 3.12)
-py -3.12 -m venv venv
+py -3.11 -m venv venv
 venv\Scripts\activate
 
 # Install all requirements
@@ -109,6 +109,19 @@ $$V = \text{smoothstep}(0, 1, C \cdot (1 - U)^{1.8})$$
   * `RELAY`: Bridges mesh partitions when drones move beyond the 6.0-unit radio range; holds station at $35\text{m}$ altitude.
   * `SENTINEL`: Low-battery safeguard ($\le 20\%$); suspends active sensor sweep to conserve power and hold position.
   * `SCOUT`: Default exploratory search state.
+
+### 4. Physics-Informed Neural Networks (PINN Substrate)
+* **Pheromone 2D Reaction-Diffusion PDE:**
+  $$\frac{\partial P}{\partial t} = D \nabla^2 P - \gamma(x, y) P$$
+  Trained offline via automatic differentiation Laplacians to model physical stigmergic vapor dissipation. Preserves high-confidence trails ($\gamma_{\text{low}} = 0.010$) while rapidly evaporating false-positive noise ($\gamma_{\text{high}} = 0.055$).
+* **Battery Aerodynamics & Payload ODE:**
+  $$\frac{dB}{dt} = -\frac{P_{\text{induced}}(z) + \frac{1}{2} C_D A \rho(z) v^3 + P_{\text{avionics}} + P_{\text{payload}}(\text{role})}{E_{\text{capacity}}}$$
+  Models speed-cubed parasitic drag ($v^3$) and role payload power (`Scout: 0.028%/tick`, `Relay: 0.031%/tick`, `Sentinel: 0.011%/tick`).
+* **Offline Training & Calibration:**
+  ```bash
+  python src/train_pinns.py
+  ```
+  Exports PyTorch models (`pinn_pheromone.pt`, `pinn_battery.pt`) and `pinn_calibration.json`, served via `/api/pinn/pheromone` and `/api/pinn/battery`.
 
 ---
 

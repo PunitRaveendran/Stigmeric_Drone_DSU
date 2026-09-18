@@ -1,0 +1,20 @@
+{
+  "pheromone": {
+    "D": 0.05,
+    "gamma_low": 0.01,
+    "gamma_high": 0.055
+  },
+  "battery": {
+    "roles": [
+      "Scout",
+      "Relay",
+      "Sentinel"
+    ],
+    "approx_drain_per_tick": {
+      "Scout": 0.028,
+      "Relay": 0.031,
+      "Sentinel": 0.011,
+      "default": 0.022
+    }
+  }
+}
