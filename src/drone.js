@@ -29,13 +29,13 @@ import { getPINNBatteryDrain } from './pinn.js';
 
 const REGIME_PARAMS = {
   SPREAD: {
-    gradientPull:  0.05,   // Very weak attraction to prevent gravity wells at spawn
-    randomWeight:  0.80,   // active random walk for wide sector coverage
-    speed:         0.28,   // nominal search speed (~10 m/s)
-    depositAmount: 0.03,   // light trail — visible exploration path
-    stepScale:     0.11,   // real-world calibrated step scale
-    turnRate:      0.05,   // exploration turns
-    inertia:       0.55,   // smooth directional persistence
+    gradientPull:  0.0,    // Pure exploration: ignore weak trails to prevent circular tail-chasing
+    randomWeight:  0.40,   // smooth wander
+    speed:         0.36,   // brisk sweeping speed
+    depositAmount: 0.02,   // light trail
+    stepScale:     0.18,   // smooth step scale
+    turnRate:      0.015,  // gentle turns — eliminates tight spinning circles
+    inertia:       0.80,   // high forward momentum across grid sectors
   },
   CONVERGE: {
     gradientPull:  0.80,   // strong attraction toward survivor signal center
@@ -351,11 +351,11 @@ export class Drone {
       ry += uGrad.dy * strength;
     }
 
-    // Inter-Drone Collision Avoidance (same-altitude gentle repulsion force)
+    // Inter-Drone Collision Avoidance & Dispersion Repulsion (prevents drone clustering)
     let repDroneX = 0;
     let repDroneY = 0;
     if (swarmContext.drones && swarmContext.drones.length > 1) {
-      const safetyRadius = 1.5; // safety distance in grid units
+      const safetyRadius = 2.5; // expanded dispersion bubble in grid units
       for (const other of swarmContext.drones) {
         if (other.id === this.id) continue;
         // Drones at different flight altitudes (>= 5m diff) can safely overlap at different heights
@@ -369,8 +369,7 @@ export class Drone {
 
         if (dist > 1e-4 && dist < safetyRadius) {
           const overlap = (safetyRadius - dist) / safetyRadius; // 0 to 1
-          // Gentle repulsion to prevent stacking
-          const force = overlap * 0.25;
+          const force = overlap * 0.65; // firm repulsion pushes drones to explore separate sectors
           repDroneX += (dx / dist) * force;
           repDroneY += (dy / dist) * force;
         }
