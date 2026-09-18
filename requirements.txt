@@ -1,0 +1,6 @@
+# Protoplasm — Stigmergic SAR Swarm Dependencies
+# Recommended Python version: Python 3.10 - 3.12 (Python 3.13 also supported for recent TF releases)
+
+ultralytics>=8.0.0
+tensorflow>=2.15.0
+numpy>=1.24.0

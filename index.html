@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protoplasm — Stigmergic SAR Swarm</title>
+  <meta name="description" content="Decentralized disaster-zone search-and-rescue swarm inspired by Physarum polycephalum slime mold." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="style.css?v=51" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ═══ FULL-BLEED CANVAS (background layer) ════════════════════════════ -->
+  <main id="canvas-wrap">
+    <canvas id="sim-canvas"></canvas>
+    <div id="tick-overlay">TICK <span id="tick-value">000000</span> · <span id="mission-timer">00:00</span></div>
+    <div id="regime-badge" class="SPREAD">
+      <div class="regime-dot-badge"></div>
+      <span id="regime-text">SPREAD</span>
+    </div>
+    <div id="fp-counter" title="False positives correctly rejected by tri-modal filter">🛡️ FP Rejected: <strong id="fp-count">0</strong></div>
+    <div id="zone-legend" class="zone-legend" aria-hidden="true">
+      <span class="legend-item"><span class="legend-dot" style="background:#3ddc68"></span> Survivor</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#ff7020"></span> Hot Debris</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#4ab0ff"></span> Wind Noise</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#d030e0"></span> Hazard</span>
+    </div>
+  </main>
+
+  <!-- ── Floating Toolbar (top center, search-bar style) ──────────────────── -->
+  <header id="toolbar" role="banner">
+    <div class="toolbar-brand">
+      <div class="brand-icon">🧫</div>
+      <div class="brand-text">
+        <span class="brand-name">PROTOPLASM</span>
+        <span class="brand-sub">Stigmergic SAR Swarm</span>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="toolbar-group">
+      <button class="btn btn-primary" id="btn-play">▶ Play</button>
+      <button class="btn"  id="btn-reset">↺ Reset</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="toolbar-group">
+      <span class="control-label">Speed</span>
+      <input type="range" id="speed-slider" min="1" max="12" value="3" step="1" />
+      <span id="speed-label" class="control-label" style="min-width:24px">3×</span>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="toolbar-group">
+      <span class="control-label">Drones</span>
+      <input type="number" id="drone-count" min="2" max="60" value="16" />
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="toolbar-group">
+      <span class="control-label">Scenario</span>
+      <select id="scenario-select">
+        <option value="disaster-zone" selected>Disaster Zone (3 Survivors)</option>
+        <option value="multi-survivor">Multi-Survivor (2 Targets)</option>
+        <option value="simple">Single Survivor</option>
+      </select>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="toolbar-group">
+      <button class="btn btn-icon" id="btn-toggle-satellite" title="Toggle Satellite Aerial Image (S)">🛰️ Satellite</button>
+      <button class="btn btn-icon active" id="btn-toggle-fog"       title="Toggle Fog of War (F)">🌫 Fog</button>
+      <button class="btn btn-icon"        id="btn-toggle-overlay"   title="Toggle zone overlay (O)">🏗 Overlay</button>
+      <button class="btn btn-icon active" id="btn-toggle-comm"      title="Toggle Agent Communication Speech Boxes (C)">💬 Agent Speech</button>
+      <button class="btn btn-icon" id="btn-force-rtl" title="Manually Trigger Return-To-Launch Base (RTL)">🏠 Force RTL</button>
+    </div>
+  </header>
+
+  <!-- ═══ LEFT PANEL (floating card) ══════════════════════════════════════ -->
+  <aside id="left-panel">
+
+    <!-- ① Rescue Certainty ──────────────────────────────────────────────── -->
+    <section class="panel-section">
+      <h2 class="panel-title">Rescue Certainty</h2>
+      <div class="certainty-wrap">
+        <div class="certainty-pct" id="certainty-pct">0%</div>
+        <div class="certainty-bar-track">
+          <div class="certainty-bar-fill" id="certainty-bar"></div>
+          <div class="certainty-threshold" style="left:30%"></div>
+          <div class="certainty-threshold" style="left:68%"></div>
+        </div>
+        <div class="certainty-labels">
+          <span style="color:var(--clr-spread)">SEARCHING</span>
+          <span style="color:var(--clr-converge)">VERIFYING</span>
+          <span style="color:var(--clr-solidify)">CONFIRMED</span>
+        </div>
+      </div>
+      <div class="certainty-explainer" id="certainty-explainer">
+        Certainty rises when multiple sensor channels agree on the same location.
+      </div>
+    </section>
+
+    <!-- ② Live Agent Debate ─────────────────────────────────────────────── -->
+    <section class="panel-section debate-section">
+      <h2 class="panel-title">🎙️ Live Agent Debate</h2>
+      <div class="debate-feed" id="debate-feed">
+        <div class="debate-empty">Waiting for agent communications…</div>
+      </div>
+    </section>
+
+    <!-- ③ Multi-Modal Consensus ─────────────────────────────────────────── -->
+    <section class="panel-section">
+      <h2 class="panel-title">Multi-Modal Consensus</h2>
+      <div class="multimodal-status-grid">
+        <div class="multimodal-item" id="mm-thermal">
+          <span class="mm-icon">🌡️</span>
+          <span class="mm-label">Thermal</span>
+          <span class="mm-val" id="mm-val-thermal">LOW</span>
+        </div>
+        <div class="multimodal-item" id="mm-audio">
+          <span class="mm-icon">🎙️</span>
+          <span class="mm-label">Audio</span>
+          <span class="mm-val" id="mm-val-audio">LOW</span>
+        </div>
+        <div class="multimodal-item" id="mm-camera">
+          <span class="mm-icon">📷</span>
+          <span class="mm-label">YOLO</span>
+          <span class="mm-val" id="mm-val-camera">LOW</span>
+        </div>
+        <div class="multimodal-item" id="mm-gas">
+          <span class="mm-icon">💨</span>
+          <span class="mm-label">Gas</span>
+          <span class="mm-val" id="mm-val-gas">LOW</span>
+        </div>
+      </div>
+      <div class="unique-corroboration-row">
+        <span class="unique-label">Unique Drone Consensus:</span>
+        <strong class="unique-val" id="unique-drone-count">0 Drones</strong>
+      </div>
+    </section>
+
+    <!-- ④ Drone Fleet Status ────────────────────────────────────────────── -->
+    <section class="panel-section">
+      <h2 class="panel-title">Drone Fleet Status</h2>
+      <div class="fleet-stats-row">
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">ACTIVE</span>
+          <span class="fleet-stat-val" id="fleet-active">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">RELAYS</span>
+          <span class="fleet-stat-val" id="fleet-relays" style="color:#00f0ff">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">SENTINELS</span>
+          <span class="fleet-stat-val" id="fleet-sentinels" style="color:var(--clr-solidify)">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">⚡ LOW BAT</span>
+          <span class="fleet-stat-val" id="fleet-lowbat" style="color:#ea4335">0</span>
+        </div>
+      </div>
+      <div id="battery-alert-bar" class="battery-alert" style="display:none">
+        ⚠️ <span id="battery-alert-text">Drone ALPHA-0 battery critical (15%)</span>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ═══ RIGHT PANEL ══════════════════════════════════════════════════════ -->
+  <aside id="side-panel">
+
+    <!-- ⓪ DISASTER MISSION SCOREBOARD ──────────────────────────────────── -->
+    <section class="panel-section scoreboard-section">
+      <div class="score-header">
+        <h2 class="panel-title" style="margin:0">Disaster Mission Control</h2>
+        <div class="score-pill" id="score-pill">0 PTS</div>
+      </div>
+      <div class="rescue-progress-row">
+        <span class="progress-label">SURVIVORS SECURED:</span>
+        <strong class="progress-val" id="survivor-score-text">0 / 3 (0%)</strong>
+      </div>
+      <div class="certainty-bar-track" style="height:6px;margin-top:4px">
+        <div class="certainty-bar-fill" id="survivor-progress-bar" style="width:0%;background:#3ddc68"></div>
+      </div>
+      <div class="rescue-progress-row" style="margin-top:8px">
+        <span class="progress-label">MAP REVEALED:</span>
+        <strong class="progress-val" id="map-explored-text" style="color:#4cc9f0">0%</strong>
+      </div>
+    </section>
+
+    <!-- ① Current Phase (Moved above survivor status and below map revealed) -->
+    <section class="panel-section phase-section" id="phase-section">
+      <div class="phase-step-badge" id="phase-badge">PHASE 1 / 4</div>
+      <div class="phase-name" id="phase-name">SPREADING</div>
+      <div class="phase-desc" id="phase-desc">Drones sweeping the disaster zone, depositing chemical trails as they explore.</div>
+
+      <!-- Phase stepper -->
+      <div class="phase-stepper">
+        <div class="phase-step active" id="step-spread">
+          <div class="phase-step-dot"></div>
+          <div class="phase-step-label">SPREAD</div>
+        </div>
+        <div class="phase-step-line" id="line-1"></div>
+        <div class="phase-step" id="step-converge">
+          <div class="phase-step-dot"></div>
+          <div class="phase-step-label">CONVERGE</div>
+        </div>
+        <div class="phase-step-line" id="line-2"></div>
+        <div class="phase-step" id="step-solidify">
+          <div class="phase-step-dot"></div>
+          <div class="phase-step-label">RESCUE</div>
+        </div>
+        <div class="phase-step-line" id="line-3"></div>
+        <div class="phase-step" id="step-rescued">
+          <div class="phase-step-dot"></div>
+          <div class="phase-step-label">RTL</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ② Individual Survivor Status ────────────────────────────────────── -->
+    <section class="panel-section">
+      <h2 class="panel-title">Individual Survivor Status</h2>
+      <div class="target-cards-list" id="target-cards-list">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </section>
+
+    <!-- ③ Live Event Feed ──────────────────────────────────────────────── -->
+    <section class="panel-section" style="flex:1">
+      <h2 class="panel-title">Live Event Feed</h2>
+      <ul id="event-log" aria-live="polite">
+        <li class="event-empty">Simulation starting…</li>
+      </ul>
+    </section>
+
+  </aside>
+
+</div>
+
+<!-- ── Simulation script ───────────────────────────────────────────────── -->
+<script type="module">
+import { PheromoneField }   from './src/field.js?v=43';
+import { DisasterScenario } from './src/scenario.js?v=43';
+import { SensorGenerator }  from './src/sensors.js?v=43';
+import { Swarm }            from './src/swarm.js?v=43';
+import { Visualizer }       from './src/visualizer.js?v=43';
+import { runSweep }         from './src/uncertainty.js?v=43';
+
+const GRID_COLS = 22;
+const GRID_ROWS = 18;
+
+let field, scenario, sensors, swarm, visualizer;
+let isRunning = false;
+let simSpeed  = 3;
+let rafHandle = null;
+let _displayedCertainty = 0;
+let _lastEventCount     = 0;
+let _falsePositives     = 0;
+let _lastDebateCount    = 0;
+let _debateMessages     = [];
+const MAX_DEBATE_MSGS   = 20;
+
+// ─── Phase config ─────────────────────────────────────────────────────────
+
+const PHASE_CONFIG = {
+  SPREAD: {
+    badge: 'PHASE 1 / 4',
+    name:  'SPREADING',
+    desc:  'Drones sweeping the disaster zone. Each drone deposits a pheromone trail — stronger signals leave heavier trails, attracting more drones.',
+    explainer: 'Certainty is low — scanning grid sectors.',
+    stepId: 'step-spread',
+  },
+  CONVERGE: {
+    badge: 'PHASE 2 / 4',
+    name:  'CONVERGING',
+    desc:  'Multi-modal signals detected! Thermal + Audio + Gas channels aligning. Swarm is pooling around high-signal areas to re-verify.',
+    explainer: 'Certainty rising — multiple sensors agreeing on a location.',
+    stepId: 'step-converge',
+  },
+  SOLIDIFY: {
+    badge: 'PHASE 3 / 4',
+    name:  '🔴 RESCUE DISPATCHED',
+    desc:  'Multi-drone consensus locked! Thermal + Audio + Gas all confirmed. Ground rescue team dispatched to target sector.',
+    explainer: 'High certainty — multi-drone corroboration locked.',
+    stepId: 'step-solidify',
+  },
+  RESCUED: {
+    badge: 'PHASE 4 / 4',
+    name:  '🟢 RTL & MISSION COMPLETE',
+    desc:  'All survivors extracted safely! Swarm returned to launch base station.',
+    explainer: 'All targets secured — drones landed at launch pad.',
+    stepId: 'step-rescued',
+  },
+};
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+
+function buildSim() {
+  const scenarioName = document.getElementById('scenario-select').value;
+  const droneCount   = Math.max(2, parseInt(document.getElementById('drone-count').value, 10) || 16);
+
+  scenario = new DisasterScenario(GRID_COLS, GRID_ROWS, scenarioName);
+  field    = new PheromoneField(GRID_COLS, GRID_ROWS);
+  sensors  = new SensorGenerator(scenario);
+  swarm    = new Swarm(field, sensors);
+  swarm.spawn(droneCount);
+
+  if (visualizer) {
+    visualizer.field    = field;
+    visualizer.scenario = scenario;
+    visualizer.swarm    = swarm;
+  }
+
+  _displayedCertainty = 0;
+  _lastEventCount     = 0;
+  document.getElementById('event-log').innerHTML = '<li class="event-empty">Simulation starting…</li>';
+}
+
+function init() {
+  const canvas = document.getElementById('sim-canvas');
+  const wrap   = document.getElementById('canvas-wrap');
+
+  buildSim();
+
+  const dpr = window.devicePixelRatio || 1;
+  visualizer = new Visualizer(canvas, field, scenario, swarm);
+  visualizer.resize(wrap.clientWidth, wrap.clientHeight, dpr);
+  window.protoplasm = {
+    get swarm()   { return swarm; },
+    get field()   { return field; },
+    get sensors() { return sensors; },
+    runSweep,
+  };
+
+  // Wait for the satellite background image to load before starting the render loop
+  // so the first frame always shows the aerial background (not a black canvas).
+  // Falls back after 1.5s in case the image is slow or unavailable.
+  let started = false;
+  function doStart() {
+    if (started) return;
+    started = true;
+    visualizer.render(); // draw one frame immediately with the now-loaded image
+    startLoop();
+  }
+
+  if (visualizer.satelliteImgLoaded) {
+    doStart();
+  } else {
+    visualizer.satelliteImg.addEventListener('load', doStart);
+    visualizer.satelliteImg.addEventListener('error', doStart); // still start if image 404s
+    setTimeout(doStart, 1500); // hard fallback
+  }
+}
+
+// ─── Loop (decoupled sim ticks from render frames) ────────────────────────
+
+const SIM_TICK_MS = 62;          // base interval per sim tick (~16 ticks/sec)
+let _lastFrameTime = 0;
+let _simAccum      = 0;
+
+function loop(timestamp) {
+  if (!_lastFrameTime) _lastFrameTime = timestamp;
+  const dt = Math.min(timestamp - _lastFrameTime, 100); // cap dt to avoid spiral
+  _lastFrameTime = timestamp;
+
+  // Accumulate time and step sim at fixed rate
+  const tickInterval = SIM_TICK_MS / simSpeed;
+  _simAccum += dt;
+
+  let stepped = false;
+  while (_simAccum >= tickInterval) {
+    swarm.step();
+    _simAccum -= tickInterval;
+    stepped = true;
+  }
+
+  // Alpha = fraction of the way to next sim tick (for interpolation)
+  const alpha = Math.min(1, _simAccum / tickInterval);
+
+  // Render every frame at full fps with interpolation
+  visualizer.render(alpha);
+
+  // Update sidebar UI only when sim actually stepped (saves DOM work)
+  if (stepped) updateUI();
+
+  if (isRunning) rafHandle = requestAnimationFrame(loop);
+}
+
+function startLoop() {
+  if (isRunning) return;
+  isRunning = true;
+  _lastFrameTime = 0;
+  _simAccum      = 0;
+  document.getElementById('btn-play').textContent = '⏸ Pause';
+  rafHandle = requestAnimationFrame(loop);
+}
+
+function pauseLoop() {
+  if (!isRunning) return;
+  isRunning = false;
+  document.getElementById('btn-play').textContent = '▶ Play';
+  cancelAnimationFrame(rafHandle);
+}
+
+function resetSim() {
+  pauseLoop();
+  buildSim();
+  _falsePositives = 0;
+  _debateMessages = [];
+  _lastDebateCount = 0;
+  document.getElementById('debate-feed').innerHTML = '<div class="debate-empty">Waiting for agent communications…</div>';
+  document.getElementById('fp-count').textContent = '0';
+  document.getElementById('battery-alert-bar').style.display = 'none';
+  startLoop();
+}
+
+function updateDebateFeed(drones, tick) {
+  let newMessages = [];
+
+  for (const drone of drones) {
+    if (drone.outbox && drone.outbox.length > 0) {
+      for (const msg of drone.outbox) {
+        if (msg.type === 'CANDIDATE_PROPOSAL' && msg.confidence >= 0.25) {
+          newMessages.push({
+            type: 'proposal',
+            callsign: msg.callsign,
+            text: `📢 Reading ${(msg.confidence * 100).toFixed(0)}% signal at (${msg.col},${msg.row}). Requesting verification.`,
+            tick,
+          });
+        } else if (msg.type === 'SECTOR_EXPLORED' && Math.random() < 0.08) {
+          newMessages.push({
+            type: 'sector',
+            callsign: msg.callsign,
+            text: `🗺️ Sector (${msg.col},${msg.row}) mapped. Moving to next quadrant.`,
+            tick,
+          });
+        } else if (msg.type === 'CONSENSUS_CONFIRMED') {
+          newMessages.push({
+            type: 'consensus',
+            callsign: msg.callsign,
+            text: `🎯 CONSENSUS LOCKED at (${msg.col},${msg.row})! Dispatching rescue team.`,
+            tick,
+          });
+        }
+      }
+    }
+
+    if (drone.lastDebateSpeech && drone.lastDebateSpeech.tick === tick) {
+      const speech = drone.lastDebateSpeech;
+      if (speech.vote === 'AGREE') {
+        newMessages.push({
+          type: 'agree',
+          callsign: drone.callsign,
+          text: `✅ I AGREE — confirmed tri-modal signal from my vantage point.`,
+          tick,
+        });
+      } else if (speech.vote === 'REJECT') {
+        newMessages.push({
+          type: 'reject',
+          callsign: drone.callsign,
+          text: `❌ I REJECT — single-channel only, likely false positive.`,
+          tick,
+        });
+      }
+    }
+  }
+
+  if (newMessages.length === 0) return;
+
+  _debateMessages = [...newMessages.slice(0, 3), ..._debateMessages].slice(0, MAX_DEBATE_MSGS);
+
+  const feed = document.getElementById('debate-feed');
+  if (!feed) return;
+  feed.innerHTML = _debateMessages.map((m, i) => {
+    const callsignColor = m.type === 'agree' ? '#3ddc68'
+                        : m.type === 'reject' ? '#ff4d6d'
+                        : m.type === 'consensus' ? '#ffd60a'
+                        : m.type === 'proposal' ? '#4cc9f0'
+                        : 'rgba(180,200,240,0.5)';
+    return `
+      <div class="debate-msg ${m.type}" style="opacity:${1 - i * 0.04}">
+        <span class="debate-time">t=${m.tick}</span>
+        <span class="debate-callsign" style="color:${callsignColor}">${m.callsign}:</span>
+        <span class="debate-text">${m.text}</span>
+      </div>
+    `;
+  }).join('');
+
+  feed.scrollTop = 0;
+}
+
+// ─── UI Updates ───────────────────────────────────────────────────────────
+
+function updateUI() {
+  const { tick, stats, drones, zonePresence, eventLog, missionScore, survivorsExtracted, survivorTargets } = swarm;
+  const { avgViscosity, clusterCertainty, dominantRegime } = stats;
+  const certainty = Math.round((clusterCertainty !== undefined ? clusterCertainty : avgViscosity) * 100);
+
+  // Tick + Mission Timer
+  document.getElementById('tick-value').textContent = tick.toString().padStart(6, '0');
+  const totalSec = Math.floor(tick * 0.062); // ~62ms per tick
+  const mm = Math.floor(totalSec / 60).toString().padStart(2, '0');
+  const ss = (totalSec % 60).toString().padStart(2, '0');
+  document.getElementById('mission-timer').textContent = `${mm}:${ss}`;
+
+  // Scoreboard & Survivor Targets Tracker
+  const totalTargets = survivorTargets ? survivorTargets.length : 3;
+  const pctSecured = Math.round((survivorsExtracted / (totalTargets || 1)) * 100);
+  document.getElementById('score-pill').textContent = `${missionScore || 0} PTS`;
+  document.getElementById('survivor-score-text').textContent = `${survivorsExtracted} / ${totalTargets} (${pctSecured}%)`;
+  document.getElementById('survivor-progress-bar').style.width = `${pctSecured}%`;
+
+  // Map Revealed Metric
+  const mapExploredEl = document.getElementById('map-explored-text');
+  if (mapExploredEl) {
+    const mapPct = stats.mapExploredPct || 0;
+    mapExploredEl.textContent = `${mapPct}%`;
+  }
+
+  // Render Target Cards with individual scores and attention focus badges
+  const cardsContainer = document.getElementById('target-cards-list');
+  if (cardsContainer && survivorTargets) {
+    cardsContainer.innerHTML = survivorTargets.map(t => {
+      const isDone = t.status === 'EXTRACTED';
+      const isDispatch = t.status === 'RESCUE_DISPATCH';
+      const isConv = t.status === 'CONVERGING';
+      const isFocus = t.isPrimaryTarget;
+
+      const statusBadge = isDone ? '<span class="t-badge done">✅ EXTRACTED</span>'
+                        : isDispatch ? '<span class="t-badge dispatch">🔴 DISPATCH</span>'
+                        : isConv ? '<span class="t-badge conv">🟡 CONVERGING</span>'
+                        : '<span class="t-badge search">🔵 SEARCHING</span>';
+
+      const focusBadge = isFocus ? '<span class="t-badge focus">⚡ ACTIVE FOCUS</span>' : '';
+      const confPct = Math.round((t.confidence || 0) * 100);
+      const barColor = isDone ? '#3ddc68' : isDispatch ? '#ff4d6d' : isConv ? '#ffd60a' : '#4cc9f0';
+
+      return `
+        <div class="target-card ${isDone ? 'done' : isDispatch ? 'dispatch' : ''} ${isFocus ? 'is-focus' : ''}">
+          <div class="t-card-top">
+            <span class="t-name">${t.name} ${focusBadge}</span>
+            ${statusBadge}
+          </div>
+          <div class="t-card-sub">${t.sector || 'SECTOR GRID'} · (${t.col}, ${t.row})</div>
+          <div class="t-card-score-row" style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;font-size:0.60rem">
+            <span style="color:var(--clr-text-faint);font-family:'Space Mono',monospace;letter-spacing:0.04em">CONFIDENCE:</span>
+            <strong style="color:${barColor};font-family:'Space Mono',monospace;font-size:0.65rem">${confPct}%</strong>
+          </div>
+          <div class="certainty-bar-track" style="height:2.5px;margin-top:2px;background:rgba(255,255,255,0.05)">
+            <div class="certainty-bar-fill" style="width:${confPct}%;background:${barColor}"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Regime badge (canvas badge)
+  const badge = document.getElementById('regime-badge');
+  badge.className = dominantRegime;
+  document.getElementById('regime-text').textContent = dominantRegime;
+
+  // ── Phase section ───────────────────────────────────────────────────────
+  const cfg = PHASE_CONFIG[dominantRegime] ?? PHASE_CONFIG.SPREAD;
+  document.getElementById('phase-badge').textContent = cfg.badge;
+  document.getElementById('phase-name').textContent  = cfg.name;
+  document.getElementById('phase-desc').textContent  = cfg.desc;
+  document.getElementById('certainty-explainer').textContent = cfg.explainer;
+
+  // Phase section background color
+  const phaseSection = document.getElementById('phase-section');
+  phaseSection.dataset.regime = dominantRegime;
+
+  // Phase stepper — mark completed steps
+  const steps = ['spread', 'converge', 'solidify', 'rescued'];
+  const regimeOrder = { SPREAD: 0, CONVERGE: 1, SOLIDIFY: 2, RESCUED: 3 };
+  const currentIdx  = regimeOrder[dominantRegime] ?? 0;
+  steps.forEach((s, i) => {
+    const el = document.getElementById(`step-${s}`);
+    if (el) el.className = 'phase-step' + (i < currentIdx ? ' done' : i === currentIdx ? ' active' : '');
+  });
+  document.getElementById('line-1').className = 'phase-step-line' + (currentIdx >= 1 ? ' done' : '');
+  document.getElementById('line-2').className = 'phase-step-line' + (currentIdx >= 2 ? ' done' : '');
+  document.getElementById('line-3').className = 'phase-step-line' + (currentIdx >= 3 ? ' done' : '');
+
+  // ── Rescue Certainty ────────────────────────────────────────────────────
+  _displayedCertainty += (certainty - _displayedCertainty) * 0.08;
+  const dispC = Math.round(_displayedCertainty);
+  document.getElementById('certainty-pct').textContent = `${dispC}%`;
+  const certBar = document.getElementById('certainty-bar');
+  certBar.style.width = `${dispC}%`;
+  const certColor = dispC >= 68 ? 'var(--clr-solidify)'
+                  : dispC >= 30 ? 'var(--clr-converge)'
+                  : 'var(--clr-spread)';
+  certBar.style.background = certColor;
+  document.getElementById('certainty-pct').style.color = certColor;
+
+  // ── Multi-Modal Consensus ────────────────────────────────────────────────
+  if (stats.channels) {
+    const { thermal, audio, camera, gas } = stats.channels;
+    document.getElementById('mm-val-thermal').textContent = thermal;
+    document.getElementById('mm-val-audio').textContent   = audio;
+    const camEl = document.getElementById('mm-val-camera');
+    if (camEl) camEl.textContent = camera || 'LOW';
+    document.getElementById('mm-val-gas').textContent     = gas;
+    document.getElementById('mm-thermal').classList.toggle('active', thermal.startsWith('ACTIVE'));
+    document.getElementById('mm-audio').classList.toggle('active', audio.startsWith('ACTIVE'));
+    const camBox = document.getElementById('mm-camera');
+    if (camBox) camBox.classList.toggle('active', camera && camera.startsWith('ACTIVE'));
+    document.getElementById('mm-gas').classList.toggle('active', gas.startsWith('ACTIVE'));
+  }
+  const maxUnique = stats.maxUniqueCorroboration || 0;
+  const uniqueEl = document.getElementById('unique-drone-count');
+  uniqueEl.textContent = `${maxUnique} Drone${maxUnique !== 1 ? 's' : ''}`;
+  uniqueEl.style.color = maxUnique >= 3 ? 'var(--clr-solidify)' : maxUnique >= 1 ? 'var(--clr-converge)' : 'var(--clr-text-faint)';
+
+  // ── Drone Fleet Status & Battery Alerts ──────────────────────────────────
+  const sentinelCount = stats.roleCounts ? stats.roleCounts.SENTINEL : (swarm.activeSentinels ? swarm.activeSentinels.size : 0);
+  const relayCount = stats.roleCounts ? stats.roleCounts.RELAY : drones.filter(d => d.role === 'RELAY').length;
+  const lowBatDrones = drones.filter(d => d.battery <= 20);
+  document.getElementById('fleet-active').textContent = drones.length;
+  const relaysEl = document.getElementById('fleet-relays');
+  if (relaysEl) relaysEl.textContent = relayCount;
+  document.getElementById('fleet-sentinels').textContent = sentinelCount;
+  document.getElementById('fleet-lowbat').textContent = lowBatDrones.length;
+
+  const alertBar = document.getElementById('battery-alert-bar');
+  if (lowBatDrones.length > 0) {
+    const worst = lowBatDrones.reduce((a, b) => a.battery < b.battery ? a : b);
+    alertBar.style.display = 'block';
+    document.getElementById('battery-alert-text').textContent =
+      `Drone ${worst.callsign} battery critical (${worst.battery}%) — RTL recommended`;
+  } else {
+    alertBar.style.display = 'none';
+  }
+
+  // ── False Positive Counter ───────────────────────────────────────────────
+  if (zonePresence) {
+    const debrisCount = zonePresence.HOT_DEBRIS ? zonePresence.HOT_DEBRIS.count : 0;
+    const windCount = zonePresence.WIND_NOISE ? zonePresence.WIND_NOISE.count : 0;
+    if ((debrisCount + windCount) > 0 && tick % 25 === 0) {
+      _falsePositives += debrisCount + windCount;
+    }
+  }
+  document.getElementById('fp-count').textContent = _falsePositives;
+
+  // ── Live Debate Feed ────────────────────────────────────────────────────
+  if (tick % 3 === 0) updateDebateFeed(drones, tick);
+
+  // ── Live Event Feed ─────────────────────────────────────────────────────
+  if (eventLog.length !== _lastEventCount) {
+    _lastEventCount = eventLog.length;
+    renderEventLog();
+  }
+}
+
+function renderEventLog() {
+  const log = document.getElementById('event-log');
+  const entries = swarm.eventLog.slice(0, 8);
+  if (entries.length === 0) {
+    log.innerHTML = '<li class="event-empty">Waiting for activity…</li>';
+    return;
+  }
+  log.innerHTML = entries.map((e, i) => `
+    <li class="event-entry ${i === 0 ? 'event-new' : ''}" style="opacity:${1 - i * 0.12}">
+      <span class="event-icon">${e.icon}</span>
+      <div class="event-body">
+        <span class="event-text">${e.text}</span>
+        <span class="event-tick">t=${e.tick}</span>
+      </div>
+    </li>
+  `).join('');
+}
+
+// ─── Canvas resize ─────────────────────────────────────────────────────────
+
+function resizeCanvas() {
+  const wrap = document.getElementById('canvas-wrap');
+  const dpr  = window.devicePixelRatio || 1;
+  visualizer.resize(wrap.clientWidth, wrap.clientHeight, dpr);
+  visualizer.render();
+}
+
+// ─── Controls ──────────────────────────────────────────────────────────────
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  isRunning ? pauseLoop() : startLoop();
+});
+document.getElementById('btn-reset').addEventListener('click', resetSim);
+
+document.getElementById('speed-slider').addEventListener('input', e => {
+  simSpeed = parseInt(e.target.value, 10);
+  document.getElementById('speed-label').textContent = `${simSpeed}×`;
+});
+
+document.getElementById('sim-canvas').addEventListener('click', e => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const cell = visualizer.cssToCell(e.clientX - rect.left, e.clientY - rect.top);
+  if (cell) swarm.addDroneAt(cell.col, cell.row);
+});
+
+document.getElementById('btn-toggle-satellite').addEventListener('click', e => {
+  visualizer.showSatelliteMode = !visualizer.showSatelliteMode;
+  e.currentTarget.classList.toggle('active', visualizer.showSatelliteMode);
+});
+document.getElementById('btn-toggle-fog').addEventListener('click', e => {
+  visualizer.showFogOfWar = !visualizer.showFogOfWar;
+  e.currentTarget.classList.toggle('active', visualizer.showFogOfWar);
+});
+document.getElementById('btn-toggle-overlay').addEventListener('click', e => {
+  visualizer.showScenarioOverlay = !visualizer.showScenarioOverlay;
+  e.currentTarget.classList.toggle('active', visualizer.showScenarioOverlay);
+});
+document.getElementById('btn-toggle-comm').addEventListener('click', e => {
+  visualizer.showAgentComm = !visualizer.showAgentComm;
+  e.currentTarget.classList.toggle('active', visualizer.showAgentComm);
+});
+document.getElementById('btn-force-rtl').addEventListener('click', () => {
+  if (swarm) {
+    swarm.isMissionComplete = true;
+    swarm.stats.dominantRegime = 'RESCUED';
+    swarm._hasLoggedRTL = true;
+    swarm._addEvent('🏠', `MANUAL OVERRIDE: Return-To-Launch (RTL) initiated by operator. All drones returning to base station.`);
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  switch (e.code) {
+    case 'Space': e.preventDefault(); isRunning ? pauseLoop() : startLoop(); break;
+    case 'KeyR':  resetSim(); break;
+    case 'KeyS':
+      visualizer.showSatelliteMode = !visualizer.showSatelliteMode;
+      document.getElementById('btn-toggle-satellite').classList.toggle('active', visualizer.showSatelliteMode);
+      break;
+    case 'KeyF':
+      visualizer.showFogOfWar = !visualizer.showFogOfWar;
+      document.getElementById('btn-toggle-fog').classList.toggle('active', visualizer.showFogOfWar);
+      break;
+    case 'KeyO':  visualizer.showScenarioOverlay = !visualizer.showScenarioOverlay; break;
+    case 'KeyC':
+      visualizer.showAgentComm = !visualizer.showAgentComm;
+      document.getElementById('btn-toggle-comm').classList.toggle('active', visualizer.showAgentComm);
+      break;
+    case 'KeyH':
+      if (swarm) {
+        swarm.isMissionComplete = true;
+        swarm.stats.dominantRegime = 'RESCUED';
+        swarm._hasLoggedRTL = true;
+        swarm._addEvent('🏠', `MANUAL OVERRIDE: Return-To-Launch (RTL) initiated by operator. All drones returning to base station.`);
+      }
+      break;
+  }
+});
+
+window.addEventListener('resize', resizeCanvas);
+
+init();
+</script>
+
+</body>
+</html>
