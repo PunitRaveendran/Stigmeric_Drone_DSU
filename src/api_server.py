@@ -23,6 +23,12 @@ import json
 import sys
 import time
 import socket
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 import numpy as np
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse
@@ -240,8 +246,10 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/nooa/negotiate':
             try:
                 from urllib.parse import parse_qs
-                import asyncio
-                from src.nooa_agent import SARSwarmAgent, SensorReading
+                try:
+                    from src.nooa_agent import SARSwarmAgent, SensorReading
+                except ImportError:
+                    from nooa_agent import SARSwarmAgent, SensorReading
 
                 query = parse_qs(parsed.query)
                 sector = query.get('sector', ['(10, 8)'])[0]
@@ -288,7 +296,10 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/nooa/negotiate':
             try:
                 import asyncio
-                from src.nooa_agent import SARSwarmAgent, SensorReading
+                try:
+                    from src.nooa_agent import SARSwarmAgent, SensorReading
+                except ImportError:
+                    from nooa_agent import SARSwarmAgent, SensorReading
 
                 content_length = int(self.headers.get('Content-Length', 0))
                 post_body = self.rfile.read(content_length).decode('utf-8')
