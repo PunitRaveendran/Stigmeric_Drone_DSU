@@ -740,7 +740,6 @@ export class Swarm {
             this._addEvent('🎯', `Multi-drone consensus! (${maxUniqueCorroboration} unique drones corroborating sector)`);
           }
         }
-      }
 
     // Periodic Beeceptor Cloud Telemetry & HIL Ingress Polling
     if (this.tick % 60 === 0) {
@@ -764,6 +763,7 @@ export class Swarm {
         }
       });
     }
+  }
 
   _addEvent(icon, text) {
     this.eventLog.unshift({ tick: this.tick, icon, text });
