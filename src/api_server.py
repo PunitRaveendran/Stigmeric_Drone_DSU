@@ -23,6 +23,12 @@ import json
 import sys
 import time
 import socket
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 import numpy as np
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse
@@ -259,12 +265,50 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(response, indent=2).encode())
             return
 
+        if parsed.path == '/api/nooa/negotiate':
+            try:
+                from urllib.parse import parse_qs
+                try:
+                    from src.nooa_agent import SARSwarmAgent, SensorReading
+                except ImportError:
+                    from nooa_agent import SARSwarmAgent, SensorReading
+
+                query = parse_qs(parsed.query)
+                sector = query.get('sector', ['(10, 8)'])[0]
+                callsign = query.get('callsign', ['ALPHA-0'])[0]
+                agent_id = query.get('agent_id', ['0'])[0]
+                cam = float(query.get('camera', [0.8])[0])
+                aud = float(query.get('audio', [0.7])[0])
+                th = float(query.get('thermal', [0.8])[0])
+                gas = float(query.get('gas', [0.4])[0])
+                conf = float(query.get('confidence', [0.65])[0])
+                raw_angles = query.get('angles', ['0.5,1.8'])[0]
+                angles = [float(a) for a in raw_angles.split(',') if a.strip()]
+
+                agent = SARSwarmAgent(agent_id=agent_id, callsign=callsign)
+                readings = SensorReading(camera=cam, audio=aud, thermal=th, gas=gas)
+                decision = asyncio.run(agent.evaluate_candidate_target(sector, readings, angles, conf))
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(decision.to_dict(), indent=2).encode())
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e), 'is_valid': False}).encode())
+                return
+
         if parsed.path == '/api/health':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({'status': 'ok', 'yolo': YOLO_AVAILABLE, 'yamnet': YAMNET_AVAILABLE}).encode())
+            self.wfile.write(json.dumps({'status': 'ok', 'yolo': YOLO_AVAILABLE, 'yamnet': YAMNET_AVAILABLE, 'nooa_ready': True}).encode())
             return
 
         if parsed.path == '/api/pinn/pheromone':
@@ -289,6 +333,53 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
             })
             self.wfile.write(json.dumps(data, indent=2).encode())
             return
+
+        return super().do_GET()
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/nooa/negotiate':
+            try:
+                import asyncio
+                try:
+                    from src.nooa_agent import SARSwarmAgent, SensorReading
+                except ImportError:
+                    from nooa_agent import SARSwarmAgent, SensorReading
+
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_body = self.rfile.read(content_length).decode('utf-8')
+                data = json.loads(post_body) if post_body else {}
+
+                agent = SARSwarmAgent(
+                    agent_id=str(data.get('agent_id', '0')),
+                    callsign=str(data.get('callsign', 'ALPHA-0'))
+                )
+                readings_data = data.get('readings', {})
+                readings = SensorReading(
+                    camera=float(readings_data.get('camera', 0.0)),
+                    audio=float(readings_data.get('audio', 0.0)),
+                    thermal=float(readings_data.get('thermal', 0.0)),
+                    gas=float(readings_data.get('gas', 0.0)),
+                )
+                angles = [float(a) for a in data.get('peer_angles', [])]
+                conf = float(data.get('confidence', 0.5))
+                sector = str(data.get('sector', '(0, 0)'))
+
+                decision = asyncio.run(agent.evaluate_candidate_target(sector, readings, angles, conf))
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(decision.to_dict(), indent=2).encode())
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e), 'is_valid': False}).encode())
+                return
 
         return super().do_GET()
 
