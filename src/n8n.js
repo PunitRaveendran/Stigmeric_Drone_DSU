@@ -9,8 +9,9 @@
  * dispatch, hospital triage routing, and field command alerts.
  */
 
-// Default test webhook or user-provided n8n cloud instance
-const DEFAULT_N8N_WEBHOOK_URL = 'https://n8n.protoplasm.internal/webhook/sar-dispatch';
+// User's live n8n cloud instance
+const DEFAULT_N8N_WEBHOOK_URL = 'https://dronedsu.app.n8n.cloud/webhook/sar-dispatch';
+const TEST_N8N_WEBHOOK_URL = 'https://dronedsu.app.n8n.cloud/webhook-test/sar-dispatch';
 
 export class N8nDispatchGateway {
   constructor(webhookUrl = DEFAULT_N8N_WEBHOOK_URL) {
@@ -69,13 +70,23 @@ export class N8nDispatchGateway {
     this.lastDispatchTime = Date.now();
 
     try {
-      const res = await fetch(this.webhookUrl, {
+      let res = await fetch(this.webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         mode: 'cors',
-      });
-      if (res.ok) {
+      }).catch(() => null);
+
+      if (!res || !res.ok) {
+        res = await fetch(TEST_N8N_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          mode: 'cors',
+        }).catch(() => null);
+      }
+
+      if (res && res.ok) {
         const responseData = await res.json().catch(() => ({ status: 'DISPATCH_QUEUED' }));
         return responseData;
       }
