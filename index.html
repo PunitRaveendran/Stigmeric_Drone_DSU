@@ -83,6 +83,8 @@
       <button class="btn btn-icon"        id="btn-toggle-overlay"   title="Toggle zone overlay (O)">🏗 Overlay</button>
       <button class="btn btn-icon active" id="btn-toggle-comm"      title="Toggle Agent Communication Speech Boxes (C)">💬 Agent Speech</button>
       <button class="btn btn-icon" id="btn-force-rtl" title="Manually Trigger Return-To-Launch Base (RTL)">🏠 Force RTL</button>
+      <button class="btn btn-icon" id="btn-inject-rogue" style="border-color:#ff0055;color:#ff4d6d" title="Simulate Byzantine Compromise / Attack Drill">🔴 Inject Rogue</button>
+      <button class="btn btn-icon active" id="btn-toggle-bft" style="border-color:#7b2cbf;color:#c77dff" title="Toggle Byzantine Fault Defense (BFT)">🛡️ BFT Defense</button>
     </div>
   </header>
 
@@ -203,6 +205,39 @@
       </div>
     </section>
 
+    <!-- ④-B Swarm Cyber Defense & Byzantine Fault Tolerance ──────────────── -->
+    <section class="panel-section security-section" id="security-panel">
+      <div class="score-header">
+        <h2 class="panel-title" style="margin:0">Swarm Cyber Defense</h2>
+        <div class="score-pill" id="bft-status-badge" style="background:rgba(0,255,170,0.15);color:#00ffaa;border:1px solid #00ffaa;font-size:9.5px;padding:2px 8px">SECURE</div>
+      </div>
+      <div class="fleet-stats-grid" style="margin-top:8px">
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">🔴 ROGUE DRONES</span>
+          <span class="fleet-stat-val" id="stat-rogue-count" style="color:#ff0055">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">🛡️ ATTACKS BLOCKED</span>
+          <span class="fleet-stat-val" id="stat-attacks-blocked" style="color:#3ddc68">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">🔒 QUARANTINED</span>
+          <span class="fleet-stat-val" id="stat-quarantined-count" style="color:#9d4edd">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">⚡ BFT QUORUM</span>
+          <span class="fleet-stat-val" id="stat-bft-quorum" style="color:#4cc9f0">>2/3 (SAFE)</span>
+        </div>
+      </div>
+      <div class="security-btn-row" style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-sm" id="btn-side-inject-rogue" style="flex:1;background:rgba(255,0,85,0.15);border:1px solid #ff0055;color:#ff4d6d;font-size:10.5px;padding:5px 6px">🔴 Inject Rogue</button>
+        <button class="btn btn-sm" id="btn-side-neutralize" style="flex:1;background:rgba(0,255,170,0.15);border:1px solid #00ffaa;color:#00ffaa;font-size:10.5px;padding:5px 6px">🟢 Neutralize</button>
+      </div>
+      <div id="security-alert-bar" class="battery-alert" style="display:none;border-left-color:#ff0055;background:rgba(255,0,85,0.12)">
+        🛡️ <span id="security-alert-text">Rogue agent isolated from mesh</span>
+      </div>
+    </section>
+
     <!-- ⑤ Individual Drone Telemetry Roster ────────────────────────────── -->
     <section class="panel-section drone-roster-section">
       <div class="roster-header">
@@ -216,6 +251,7 @@
           <option value="SCOUT">Scouts</option>
           <option value="RELAY">Relays</option>
           <option value="SENTINEL">Sentinels</option>
+          <option value="ROGUE">Rogue / Quarantined</option>
           <option value="STIGMERGIC">Degraded Comms</option>
           <option value="LOWBAT">Low Battery</option>
         </select>
@@ -595,6 +631,66 @@ function updateUI() {
   const fleetDist = document.getElementById('fleet-total-dist');
   if (fleetDist) fleetDist.textContent = distStr;
 
+  // Cyber-Physical Security & Byzantine Telemetry
+  const secStats = swarm ? (swarm.securityStats || {}) : {};
+  const rogueCountEl = document.getElementById('stat-rogue-count');
+  if (rogueCountEl) rogueCountEl.textContent = secStats.rogueCount || 0;
+
+  const attacksBlockedEl = document.getElementById('stat-attacks-blocked');
+  if (attacksBlockedEl) attacksBlockedEl.textContent = secStats.attacksBlocked || 0;
+
+  const quarantinedEl = document.getElementById('stat-quarantined-count');
+  if (quarantinedEl) quarantinedEl.textContent = secStats.quarantinedCount || 0;
+
+  const bftBadge = document.getElementById('bft-status-badge');
+  const bftQuorum = document.getElementById('stat-bft-quorum');
+  const secAlertBar = document.getElementById('security-alert-bar');
+  const secAlertText = document.getElementById('security-alert-text');
+
+  const isBFTActive = swarm ? swarm.byzantineDefenseEnabled : true;
+  if (bftBadge) {
+    if (!isBFTActive) {
+      bftBadge.textContent = 'DEFENSE OFF';
+      bftBadge.style.color = '#ff9500';
+      bftBadge.style.borderColor = '#ff9500';
+      bftBadge.style.background = 'rgba(255,149,0,0.15)';
+    } else if (secStats.quarantinedCount > 0) {
+      bftBadge.textContent = 'ISOLATION ACTIVE';
+      bftBadge.style.color = '#9d4edd';
+      bftBadge.style.borderColor = '#9d4edd';
+      bftBadge.style.background = 'rgba(157,78,221,0.15)';
+    } else if (secStats.rogueCount > 0) {
+      bftBadge.textContent = 'BREACH DETECTED';
+      bftBadge.style.color = '#ff0055';
+      bftBadge.style.borderColor = '#ff0055';
+      bftBadge.style.background = 'rgba(255,0,85,0.15)';
+    } else {
+      bftBadge.textContent = 'SECURE';
+      bftBadge.style.color = '#00ffaa';
+      bftBadge.style.borderColor = '#00ffaa';
+      bftBadge.style.background = 'rgba(0,255,170,0.15)';
+    }
+  }
+
+  if (bftQuorum) {
+    const honestCount = (drones?.length || 0) - (secStats.rogueCount || 0);
+    const minHonestNeeded = Math.floor(((drones?.length || 0) * 2) / 3) + 1;
+    bftQuorum.textContent = honestCount >= minHonestNeeded ? '>2/3 (SAFE)' : '<2/3 (RISK)';
+    bftQuorum.style.color = honestCount >= minHonestNeeded ? '#4cc9f0' : '#ff0055';
+  }
+
+  if (secAlertBar && secAlertText) {
+    if (secStats.quarantinedCount > 0) {
+      secAlertBar.style.display = 'block';
+      secAlertText.textContent = `${secStats.quarantinedCount} rogue agent(s) isolated from mesh consensus`;
+    } else if (secStats.rogueCount > 0) {
+      secAlertBar.style.display = 'block';
+      secAlertText.textContent = `${secStats.rogueCount} rogue drone(s) active in disaster zone`;
+    } else {
+      secAlertBar.style.display = 'none';
+    }
+  }
+
   // Scoreboard & Survivor Targets Tracker
   const totalTargets = survivorTargets ? survivorTargets.length : 3;
   const pctSecured = Math.round((survivorsExtracted / (totalTargets || 1)) * 100);
@@ -807,6 +903,7 @@ function updateDroneRoster(drones) {
     if (roleFilter === 'SCOUT' && d.role !== 'SCOUT') return false;
     if (roleFilter === 'RELAY' && d.role !== 'RELAY') return false;
     if (roleFilter === 'SENTINEL' && d.role !== 'SENTINEL') return false;
+    if (roleFilter === 'ROGUE' && !d.isRogue && !d.isQuarantined) return false;
     if (roleFilter === 'STIGMERGIC' && d.decisionMode !== 'STIGMERGIC') return false;
     if (roleFilter === 'LOWBAT' && d.battery > 20) return false;
     return true;
@@ -829,14 +926,26 @@ function updateDroneRoster(drones) {
       ? '<span class="drone-badge stig" title="Stigmergic Pheromone Fallback">📵 STIG</span>'
       : '<span class="drone-badge" style="background:rgba(61,220,104,0.12);color:#3ddc68;border:1px solid rgba(61,220,104,0.25)" title="Full Radio Comms">📶 FULL</span>';
 
+    const secBadge = d.isQuarantined
+      ? '<span class="drone-badge" style="background:rgba(157,78,221,0.22);color:#c77dff;border:1px solid #9d4edd">🔒 ISOLATED</span>'
+      : d.isRogue
+      ? '<span class="drone-badge" style="background:rgba(255,0,85,0.22);color:#ff0055;border:1px solid #ff0055">⚠️ ROGUE</span>'
+      : '';
+
+    const trust = swarm && typeof swarm.getAverageTrust === 'function'
+      ? Math.round(swarm.getAverageTrust(d.id) * 100)
+      : 100;
+    const trustColor = trust > 70 ? '#3ddc68' : trust > 40 ? '#ffd60a' : '#ff0055';
+
     return `
-      <div class="drone-card ${isSelected ? 'selected' : ''}" id="drone-card-${d.id}" data-id="${d.id}">
+      <div class="drone-card ${isSelected ? 'selected' : ''} ${d.isRogue ? 'rogue-card' : ''} ${d.isQuarantined ? 'quarantined-card' : ''}" id="drone-card-${d.id}" data-id="${d.id}">
         <div class="drone-card-top">
           <div class="drone-callsign-wrap">
             <span class="drone-callsign">${d.callsign || 'DRONE'}</span>
             <span class="drone-id-tag">#${d.id.toString().padStart(2, '0')}</span>
           </div>
           <div class="drone-badges">
+            ${secBadge}
             <span class="drone-badge ${roleClass}">${d.role}</span>
             ${modeBadge}
           </div>
@@ -851,11 +960,11 @@ function updateDroneRoster(drones) {
         </div>
         <div class="drone-card-row">
           <span>POS: (${d.x.toFixed(1)}, ${d.y.toFixed(1)}) [${d.col},${d.row}]</span>
-          <span style="color:var(--clr-text)">${(d.currentSpeed || 0).toFixed(1)} m/s</span>
+          <span style="color:${trustColor}">🛡️ ${trust}%</span>
         </div>
         <div class="drone-card-row" style="color:var(--clr-text-faint);font-size:8.5px">
           <span>DIST: ${(d.totalDistance || 0).toFixed(0)}m</span>
-          <span>BASE: ${(d.distanceToBase || 0).toFixed(0)}m</span>
+          <span>SPEED: ${(d.currentSpeed || 0).toFixed(1)}m/s</span>
           <span style="color:${d.regime === 'SOLIDIFY' ? '#ff4d6d' : d.regime === 'CONVERGE' ? '#ffd60a' : '#4cc9f0'}">${d.regime}</span>
         </div>
       </div>
@@ -955,11 +1064,34 @@ document.getElementById('btn-force-rtl').addEventListener('click', () => {
   }
 });
 
+// ═══ CYBER-PHYSICAL SECURITY & BYZANTINE FAULT TOLERANCE LISTENERS ═════════
+document.getElementById('btn-inject-rogue')?.addEventListener('click', () => {
+  if (swarm) swarm.injectRogueDrone();
+});
+document.getElementById('btn-side-inject-rogue')?.addEventListener('click', () => {
+  if (swarm) swarm.injectRogueDrone();
+});
+document.getElementById('btn-side-neutralize')?.addEventListener('click', () => {
+  if (swarm) swarm.neutralizeRogueDrones();
+});
+document.getElementById('btn-toggle-bft')?.addEventListener('click', e => {
+  if (swarm) {
+    const active = swarm.toggleByzantineDefense();
+    e.currentTarget.classList.toggle('active', active);
+  }
+});
+
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   switch (e.code) {
     case 'Space': e.preventDefault(); isRunning ? pauseLoop() : startLoop(); break;
     case 'KeyR':  resetSim(); break;
+    case 'KeyB':
+      if (swarm) {
+        const active = swarm.toggleByzantineDefense();
+        document.getElementById('btn-toggle-bft')?.classList.toggle('active', active);
+      }
+      break;
     case 'KeyS':
       visualizer.showSatelliteMode = !visualizer.showSatelliteMode;
       document.getElementById('btn-toggle-satellite').classList.toggle('active', visualizer.showSatelliteMode);

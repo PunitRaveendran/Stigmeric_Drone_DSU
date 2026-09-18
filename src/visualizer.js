@@ -1054,7 +1054,39 @@ export class Visualizer {
     const py = oy + (ry + jy) * cs;
     const r  = Math.max(cs * 0.28, 5);
 
-    // Dynamic Role Indicators (Orthogonal to Regime)
+    // Dynamic Role & Security Indicators (Orthogonal to Regime)
+
+    // ═══ CYBER-PHYSICAL SECURITY: Rogue Drone Visual Indicator ═══
+    if (drone.isRogue) {
+      ctx.save();
+      const roguePulse = 0.5 + 0.5 * Math.sin(jt * 6.0 + drone.id * 1.5);
+      ctx.strokeStyle = '#ff0055';
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 0.7 + 0.3 * roguePulse;
+      ctx.beginPath();
+      ctx.arc(px, py, r * (2.2 + 0.5 * roguePulse), 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = `700 ${Math.max(8, cs * 0.26)}px 'Space Mono', monospace`;
+      ctx.fillStyle = '#ff0055';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠️ ROGUE [SPOOFING]', px, py - r * 2.4);
+      ctx.restore();
+    } else if (drone.isQuarantined) {
+      ctx.save();
+      ctx.strokeStyle = '#9d4edd';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(px, py, r * 2.0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = `700 ${Math.max(8, cs * 0.26)}px 'Space Mono', monospace`;
+      ctx.fillStyle = '#9d4edd';
+      ctx.textAlign = 'center';
+      ctx.fillText('🔒 QUARANTINED', px, py - r * 2.4);
+      ctx.restore();
+    }
 
     // Self-Healing Comms: STIGMERGIC mode amber warning ring
     if (drone.decisionMode === 'STIGMERGIC') {
@@ -1504,8 +1536,8 @@ export class Visualizer {
     ctx.stroke();
 
     // Floating Telemetry Card
-    const cardW = 216 * dpr;
-    const cardH = 138 * dpr;
+    const cardW = 224 * dpr;
+    const cardH = 156 * dpr;
     let cardX = px + r + 16 * dpr;
     let cardY = py - cardH / 2;
 
@@ -1596,6 +1628,23 @@ export class Visualizer {
     ctx.fillText(`COMMS :`, cardX + 10 * dpr, cardY + 108 * dpr);
     ctx.fillStyle = modeColor;
     ctx.fillText(`${modeLabel} (LQ: ${lqVal})`, cardX + 55 * dpr, cardY + 108 * dpr);
+
+    // Cyber-Physical Security & Trust Status
+    const secStatus = drone.isQuarantined ? 'ISOLATED (QUARANTINED)' : drone.isRogue ? 'ROGUE (SPOOFING)' : 'SECURE (VERIFIED)';
+    const secColor = drone.isQuarantined ? '#9d4edd' : drone.isRogue ? '#ff0055' : '#00ffaa';
+    ctx.fillStyle = 'rgba(200,225,255,0.7)';
+    ctx.fillText(`SECURITY:`, cardX + 10 * dpr, cardY + 122 * dpr);
+    ctx.fillStyle = secColor;
+    ctx.fillText(`${secStatus}`, cardX + 68 * dpr, cardY + 122 * dpr);
+
+    const trustVal = this.swarm && typeof this.swarm.getAverageTrust === 'function' 
+      ? Math.round(this.swarm.getAverageTrust(drone.id) * 100) 
+      : 100;
+    const trustColor = trustVal > 70 ? '#3ddc68' : trustVal > 40 ? '#ffd60a' : '#ff0055';
+    ctx.fillStyle = 'rgba(200,225,255,0.7)';
+    ctx.fillText(`TRUST   :`, cardX + 10 * dpr, cardY + 136 * dpr);
+    ctx.fillStyle = trustColor;
+    ctx.fillText(`${trustVal}%`, cardX + 68 * dpr, cardY + 136 * dpr);
 
     ctx.restore();
   }
