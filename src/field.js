@@ -6,6 +6,8 @@
  * No LLM, no central planner — pure deterministic math.
  */
 
+import { getPINNDecayRate } from './pinn.js';
+
 export const CELL_SIZE = 24; // pixels per grid cell in the canvas renderer
 
 export class PheromoneField {
@@ -124,18 +126,18 @@ export class PheromoneField {
       const s = this.strength[i];
       const age = this._tick - this.lastVisit[i];
 
-      // Strength-aware decay rate:
-      // Weak signals (s < 0.35) decay fast (0.045/tick) so noise clears quickly.
-      // Strong multi-drone signals (s >= 0.50) decay slowly (0.008/tick) so leads are preserved.
-      let decayRate = 0.045;
+      // Strength-aware decay rate (PINN Reaction-Diffusion Reaction Term gamma):
+      // Weak signals (s < 0.35) decay fast (gamma_high) so noise clears quickly.
+      // Strong multi-drone signals (s >= 0.50) decay slowly (gamma_low) so leads are preserved.
+      let decayRate = getPINNDecayRate(false);
       let decayFloor = this.minStrength;
 
       if (s >= 0.50) {
-        decayRate = 0.008;
+        decayRate = getPINNDecayRate(true);
         // Decay floor ensures high-confidence survivor leads never vanish completely while swarm explores elsewhere
         decayFloor = 0.22;
       } else if (s >= 0.30) {
-        decayRate = 0.022;
+        decayRate = (getPINNDecayRate(false) + getPINNDecayRate(true)) * 0.5;
         decayFloor = 0.08;
       }
 

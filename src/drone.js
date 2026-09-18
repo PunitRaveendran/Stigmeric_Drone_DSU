@@ -23,6 +23,7 @@ import {
   SPREAD_MAX,
   SOLIDIFY_MIN,
 } from './uncertainty.js';
+import { getPINNBatteryDrain } from './pinn.js';
 
 // ─── Regime movement parameters ──────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ export class Drone {
     this.sentinelTargetCol = null;
     this.sentinelTargetRow = null;
     this.battery = 94 + Math.floor(Math.floor(Math.random() * 6)); // 94–99% telemetry
+    this.batteryFloat = this.battery;
     
     // Flight Altitude Band (15m, 25m, 35m tiers for multi-layer 3D flight spacing)
     this.altitude = 15 + (id % 3) * 10;
@@ -227,9 +229,11 @@ export class Drone {
     this.viscosity = computeViscosity(this.uncertainty, this.confidence);
     this.regime    = classifyRegime(this.viscosity);
 
-    // Battery slow discharge simulation (realistic telemetry)
-    if (tick % 300 === 0 && this.battery > 15) {
-      this.battery -= 1;
+    // Battery discharge governed by PINN aerodynamic & role payload ODE
+    const drain = getPINNBatteryDrain(this.role);
+    if (tick % 30 === 0 && this.battery > 5) {
+      this.batteryFloat = Math.max(5, this.batteryFloat - drain);
+      this.battery = Math.round(this.batteryFloat);
     }
   }
 

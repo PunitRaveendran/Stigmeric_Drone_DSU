@@ -37,6 +37,28 @@ sr = 16000
 duration = 2.0
 t_audio = np.linspace(0, duration, int(sr * duration), dtype=np.float32)
 
+# ─── PINN Calibration ────────────────────────────────────────────────────────
+PINN_CALIB = {}
+pinn_path = os.path.join(os.path.dirname(__file__), "pinn_calibration.json")
+try:
+    if os.path.exists(pinn_path):
+        with open(pinn_path) as f:
+            PINN_CALIB = json.load(f)
+        print("  ✅ [PINN] Physics calibration loaded")
+    else:
+        PINN_CALIB = {
+            "pheromone": {"D": 0.05, "gamma_low": 0.010, "gamma_high": 0.055},
+            "battery": {
+                "roles": ["Scout", "Relay", "Sentinel"],
+                "approx_drain_per_tick": {
+                    "Scout": 0.028, "Relay": 0.031, "Sentinel": 0.011, "default": 0.022
+                }
+            }
+        }
+        print("  ℹ️ [PINN] Using baseline calibration (run train_pinns.py to update)")
+except Exception as e:
+    print(f"  ⚠️ [PINN] Error loading calibration: {e}")
+
 # ─── 1. Synthetic Inputs Generation ───────────────────────────────────────────
 
 # 1. Survivor (Human in Rubble)
@@ -243,6 +265,29 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'status': 'ok', 'yolo': YOLO_AVAILABLE, 'yamnet': YAMNET_AVAILABLE}).encode())
+            return
+
+        if parsed.path == '/api/pinn/pheromone':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            data = PINN_CALIB.get("pheromone", {"D": 0.05, "gamma_low": 0.010, "gamma_high": 0.055})
+            self.wfile.write(json.dumps(data, indent=2).encode())
+            return
+
+        if parsed.path == '/api/pinn/battery':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            data = PINN_CALIB.get("battery", {
+                "roles": ["Scout", "Relay", "Sentinel"],
+                "approx_drain_per_tick": {
+                    "Scout": 0.028, "Relay": 0.031, "Sentinel": 0.011, "default": 0.022
+                }
+            })
+            self.wfile.write(json.dumps(data, indent=2).encode())
             return
 
         return super().do_GET()
