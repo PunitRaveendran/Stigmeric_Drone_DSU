@@ -375,7 +375,7 @@ export class Visualizer {
 
   _drawAttentionShift(ctx, cols, rows, cs, ox, oy) {
     const activeTarget = this.swarm.stats.activeTarget;
-    if (!activeTarget || activeTarget.status === 'EXTRACTED') return;
+    if (!activeTarget || activeTarget.status === 'EXTRACTED' || (activeTarget.confidence || 0) < 0.20) return;
 
     // Target coordinates on canvas
     const tx = ox + (activeTarget.col + 0.5) * cs;
