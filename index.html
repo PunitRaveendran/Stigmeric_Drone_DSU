@@ -7,14 +7,17 @@
   <meta name="description" content="Decentralized disaster-zone search-and-rescue swarm inspired by Physarum polycephalum slime mold." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="style.css?v=52" />
+  <link rel="stylesheet" href="style.css?v=54" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 </head>
 <body>
 
 <div id="app">
 
-  <!-- ═══ FULL-BLEED CANVAS (background layer) ════════════════════════════ -->
+  <!-- ═══ FULL-BLEED CANVAS & MAP (background layer) ═══════════════════════ -->
   <main id="canvas-wrap">
+    <div id="map-container"></div>
     <canvas id="sim-canvas"></canvas>
     <div id="tick-overlay">TICK <span id="tick-value">000000</span> · REAL <span id="real-time-val">00:00</span> · SIM <span id="mission-timer">00:00</span> · <span id="hud-spd-val">0.0 m/s</span> · <span id="hud-dist-val">0.0 km</span></div>
     <div id="regime-badge" class="SPREAD">
@@ -78,7 +81,7 @@
     <div class="sep"></div>
 
     <div class="toolbar-group">
-      <button class="btn btn-icon" id="btn-toggle-satellite" title="Toggle Satellite Aerial Image (S)">🛰️ Satellite</button>
+      <button class="btn btn-icon active" id="btn-toggle-satellite" title="Toggle Live Satellite Map (S)">🛰️ Satellite</button>
       <button class="btn btn-icon active" id="btn-toggle-fog"       title="Toggle Fog of War (F)">🌫 Fog</button>
       <button class="btn btn-icon"        id="btn-toggle-overlay"   title="Toggle zone overlay (O)">🏗 Overlay</button>
       <button class="btn btn-icon active" id="btn-toggle-comm"      title="Toggle Agent Communication Speech Boxes (C)">💬 Agent Speech</button>
@@ -112,7 +115,7 @@
 
     <!-- ② Live Agent Debate ─────────────────────────────────────────────── -->
     <section class="panel-section debate-section">
-      <h2 class="panel-title">🎙️ Live Agent Debate</h2>
+      <h2 class="panel-title">Live Agent Debate</h2>
       <div class="debate-feed" id="debate-feed">
         <div class="debate-empty">Waiting for agent communications…</div>
       </div>
@@ -123,22 +126,22 @@
       <h2 class="panel-title">Multi-Modal Consensus</h2>
       <div class="multimodal-status-grid">
         <div class="multimodal-item" id="mm-thermal">
-          <span class="mm-icon">🌡️</span>
+          <span class="mm-icon"></span>
           <span class="mm-label">Thermal</span>
           <span class="mm-val" id="mm-val-thermal">LOW</span>
         </div>
         <div class="multimodal-item" id="mm-audio">
-          <span class="mm-icon">🎙️</span>
+          <span class="mm-icon"></span>
           <span class="mm-label">Audio</span>
           <span class="mm-val" id="mm-val-audio">LOW</span>
         </div>
         <div class="multimodal-item" id="mm-camera">
-          <span class="mm-icon">📷</span>
+          <span class="mm-icon"></span>
           <span class="mm-label">YOLO</span>
           <span class="mm-val" id="mm-val-camera">LOW</span>
         </div>
         <div class="multimodal-item" id="mm-gas">
-          <span class="mm-icon">💨</span>
+          <span class="mm-icon"></span>
           <span class="mm-label">Gas</span>
           <span class="mm-val" id="mm-val-gas">LOW</span>
         </div>
@@ -166,16 +169,16 @@
           <span class="fleet-stat-val" id="fleet-sentinels" style="color:var(--clr-solidify)">0</span>
         </div>
         <div class="fleet-stat">
-          <span class="fleet-stat-label">⚡ LOW BAT</span>
+          <span class="fleet-stat-label"> LOW BAT</span>
           <span class="fleet-stat-val" id="fleet-lowbat" style="color:#ea4335">0</span>
         </div>
         <div class="fleet-stat">
-          <span class="fleet-stat-label">📵 DEGRADED</span>
+          <span class="fleet-stat-label"> DEGRADED</span>
           <span class="fleet-stat-val" id="fleet-degraded" style="color:#ff9500">0</span>
         </div>
       </div>
       <div class="comms-health-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:0.62rem;font-family:'Space Mono',monospace;color:rgba(180,200,240,0.6)">
-        <span>📶 COMMS:</span>
+        <span> COMMS:</span>
         <div class="certainty-bar-track" style="flex:1;height:4px;background:rgba(255,255,255,0.06)">
           <div class="certainty-bar-fill" id="comms-health-bar" style="width:100%;background:#3ddc68;transition:width 0.3s ease,background 0.3s ease"></div>
         </div>
@@ -183,23 +186,23 @@
       </div>
       <div class="fleet-telemetry-row">
         <div class="fleet-stat">
-          <span class="fleet-stat-label">⏱️ REAL TIME</span>
+          <span class="fleet-stat-label"> REAL TIME</span>
           <span class="fleet-stat-val" id="fleet-real-time">00:00</span>
         </div>
         <div class="fleet-stat">
-          <span class="fleet-stat-label">⚡ AVG SPEED</span>
+          <span class="fleet-stat-label">AVG SPEED</span>
           <span class="fleet-stat-val" id="fleet-avg-speed">0.0 m/s</span>
         </div>
         <div class="fleet-stat">
-          <span class="fleet-stat-label">📍 TOTAL DIST</span>
+          <span class="fleet-stat-label">TOTAL DIST</span>
           <span class="fleet-stat-val" id="fleet-total-dist">0.0 km</span>
         </div>
       </div>
       <div id="battery-alert-bar" class="battery-alert" style="display:none">
-        ⚠️ <span id="battery-alert-text">Drone ALPHA-0 battery critical (15%)</span>
+         <span id="battery-alert-text">Drone ALPHA-0 battery critical (15%)</span>
       </div>
       <div id="comms-alert-bar" class="battery-alert" style="display:none;border-left-color:#ff9500">
-        📵 <span id="comms-alert-text">Comms degraded</span>
+         <span id="comms-alert-text">Comms degraded</span>
       </div>
     </section>
 
@@ -312,6 +315,7 @@ const GRID_COLS = 22;
 const GRID_ROWS = 18;
 
 let field, scenario, sensors, swarm, visualizer;
+let mapInstance = null;
 let isRunning = false;
 let simSpeed  = 3;
 let rafHandle = null;
@@ -322,6 +326,55 @@ let _lastDebateCount    = 0;
 let _debateMessages     = [];
 let _missionRealElapsedMs = 0;
 const MAX_DEBATE_MSGS   = 20;
+
+// ─── MapLibre GL JS Live Satellite Map ────────────────────────────────────
+
+function initMap() {
+  if (typeof maplibregl === 'undefined') {
+    console.warn('MapLibre GL JS library not loaded — fallback to procedural background.');
+    return;
+  }
+
+  try {
+    mapInstance = new maplibregl.Map({
+      container: 'map-container',
+      style: {
+        version: 8,
+        sources: {
+          'esri-satellite': {
+            type: 'raster',
+            tiles: [
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            ],
+            tileSize: 256,
+            attribution: '© Esri, Maxar, Earthstar Geographics'
+          }
+        },
+        layers: [
+          {
+            id: 'esri-satellite-layer',
+            type: 'raster',
+            source: 'esri-satellite',
+            minzoom: 0,
+            maxzoom: 19
+          }
+        ]
+      },
+      center: [-122.3995, 37.7915], // Downtown San Francisco Financial District / Urban Core
+      zoom: 16.6,
+      pitch: 0,
+      bearing: 0,
+      interactive: false, // Fixed to disaster sector, pass clicks directly to simulation canvas
+      attributionControl: false
+    });
+
+    mapInstance.on('load', () => {
+      console.log('🗺️ MapLibre GL JS live satellite map initialized.');
+    });
+  } catch (err) {
+    console.warn('MapLibre initialization warning:', err);
+  }
+}
 
 // ─── Phase config ─────────────────────────────────────────────────────────
 
@@ -383,6 +436,7 @@ function init() {
   const canvas = document.getElementById('sim-canvas');
   const wrap   = document.getElementById('canvas-wrap');
 
+  initMap();
   buildSim();
 
   const dpr = window.devicePixelRatio || 1;
@@ -392,27 +446,12 @@ function init() {
     get swarm()   { return swarm; },
     get field()   { return field; },
     get sensors() { return sensors; },
+    get map()     { return mapInstance; },
     runSweep,
   };
 
-  // Wait for the satellite background image to load before starting the render loop
-  // so the first frame always shows the aerial background (not a black canvas).
-  // Falls back after 1.5s in case the image is slow or unavailable.
-  let started = false;
-  function doStart() {
-    if (started) return;
-    started = true;
-    visualizer.render(); // draw one frame immediately with the now-loaded image
-    startLoop();
-  }
-
-  if (visualizer.satelliteImgLoaded) {
-    doStart();
-  } else {
-    visualizer.satelliteImg.addEventListener('load', doStart);
-    visualizer.satelliteImg.addEventListener('error', doStart); // still start if image 404s
-    setTimeout(doStart, 1500); // hard fallback
-  }
+  visualizer.render();
+  startLoop();
 }
 
 // ─── Loop (decoupled sim ticks from render frames) ────────────────────────
@@ -504,7 +543,7 @@ function updateDebateFeed(drones, tick) {
           newMessages.push({
             type: 'consensus',
             callsign: msg.callsign,
-            text: `🎯 CONSENSUS LOCKED at (${msg.col},${msg.row})! Dispatching rescue team.`,
+            text: ` CONSENSUS LOCKED at (${msg.col},${msg.row})! Dispatching rescue team.`,
             tick,
           });
         }
@@ -517,14 +556,14 @@ function updateDebateFeed(drones, tick) {
         newMessages.push({
           type: 'agree',
           callsign: drone.callsign,
-          text: `✅ I AGREE — confirmed tri-modal signal from my vantage point.`,
+          text: ` I AGREE — confirmed tri-modal signal from my vantage point.`,
           tick,
         });
       } else if (speech.vote === 'REJECT') {
         newMessages.push({
           type: 'reject',
           callsign: drone.callsign,
-          text: `❌ I REJECT — single-channel only, likely false positive.`,
+          text: ` I REJECT — single-channel only, likely false positive.`,
           tick,
         });
       }
@@ -618,12 +657,12 @@ function updateUI() {
       const isConv = t.status === 'CONVERGING';
       const isFocus = t.isPrimaryTarget;
 
-      const statusBadge = isDone ? '<span class="t-badge done">✅ EXTRACTED</span>'
-                        : isDispatch ? '<span class="t-badge dispatch">🔴 DISPATCH</span>'
-                        : isConv ? '<span class="t-badge conv">🟡 CONVERGING</span>'
-                        : '<span class="t-badge search">🔵 SEARCHING</span>';
+      const statusBadge = isDone ? '<span class="t-badge done">EXTRACTED</span>'
+                        : isDispatch ? '<span class="t-badge dispatch"> DISPATCH</span>'
+                        : isConv ? '<span class="t-badge conv"> CONVERGING</span>'
+                        : '<span class="t-badge search">SEARCHING</span>';
 
-      const focusBadge = isFocus ? '<span class="t-badge focus">⚡ ACTIVE FOCUS</span>' : '';
+      const focusBadge = isFocus ? '<span class="t-badge focus"> ACTIVE FOCUS</span>' : '';
       const confPct = Math.round((t.confidence || 0) * 100);
       const barColor = isDone ? '#3ddc68' : isDispatch ? '#ff4d6d' : isConv ? '#ffd60a' : '#4cc9f0';
 
@@ -888,12 +927,30 @@ function renderEventLog() {
   `).join('');
 }
 
-// ─── Canvas resize ─────────────────────────────────────────────────────────
+// ─── Canvas & Map resize ───────────────────────────────────────────────────
 
 function resizeCanvas() {
   const wrap = document.getElementById('canvas-wrap');
   const dpr  = window.devicePixelRatio || 1;
   visualizer.resize(wrap.clientWidth, wrap.clientHeight, dpr);
+  if (mapInstance) {
+    mapInstance.resize();
+  }
+  visualizer.render();
+}
+
+function setSatelliteMode(enabled) {
+  if (!visualizer) return;
+  visualizer.showSatelliteMode = enabled;
+  const btn = document.getElementById('btn-toggle-satellite');
+  if (btn) btn.classList.toggle('active', enabled);
+  const mapEl = document.getElementById('map-container');
+  if (mapEl) {
+    mapEl.style.display = enabled ? 'block' : 'none';
+    if (enabled && mapInstance) {
+      mapInstance.resize();
+    }
+  }
   visualizer.render();
 }
 
@@ -930,9 +987,8 @@ if (searchEl) searchEl.addEventListener('input', () => updateDroneRoster(swarm ?
 const filterRoleEl = document.getElementById('drone-filter-role');
 if (filterRoleEl) filterRoleEl.addEventListener('change', () => updateDroneRoster(swarm ? swarm.drones : []));
 
-document.getElementById('btn-toggle-satellite').addEventListener('click', e => {
-  visualizer.showSatelliteMode = !visualizer.showSatelliteMode;
-  e.currentTarget.classList.toggle('active', visualizer.showSatelliteMode);
+document.getElementById('btn-toggle-satellite').addEventListener('click', () => {
+  setSatelliteMode(!visualizer.showSatelliteMode);
 });
 document.getElementById('btn-toggle-fog').addEventListener('click', e => {
   visualizer.showFogOfWar = !visualizer.showFogOfWar;
@@ -961,8 +1017,7 @@ document.addEventListener('keydown', e => {
     case 'Space': e.preventDefault(); isRunning ? pauseLoop() : startLoop(); break;
     case 'KeyR':  resetSim(); break;
     case 'KeyS':
-      visualizer.showSatelliteMode = !visualizer.showSatelliteMode;
-      document.getElementById('btn-toggle-satellite').classList.toggle('active', visualizer.showSatelliteMode);
+      setSatelliteMode(!visualizer.showSatelliteMode);
       break;
     case 'KeyF':
       visualizer.showFogOfWar = !visualizer.showFogOfWar;

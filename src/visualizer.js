@@ -63,16 +63,6 @@ export class Visualizer {
     this.showGrid            = false;
     this.showTrails          = true;
 
-    // Load satellite image
-    this.satelliteImg = new Image();
-    this.satelliteImg.src = 'satellite_bg.png';
-    this.satelliteImgLoaded = false;
-    this.satelliteImg.onload = () => {
-      this.satelliteImgLoaded = true;
-      this._satelliteCanvas = null; // invalidate cache so next render rebuilds with the actual image
-      this._satelliteCanvasDirty = true;
-    }; // default: agent communication display boxes ON
-
     this.hoveredDrone = null;
     this.selectedDroneId = null;
     this._mouseCssX   = -9999;
@@ -122,7 +112,6 @@ export class Visualizer {
     this.canvas.style.height = `${cssHeight}px`;
     this._layout = null;
     this._noiseCanvas = null; // regenerate on resize
-    this._satelliteCanvas = null; // regenerate on resize
   }
 
   _getLayout() {
@@ -157,23 +146,27 @@ export class Visualizer {
     // ── Update smooth display field ──────────────────────────────────────
     this._updateDisplayField();
 
-    // ── 1. Background + Satellite Imagery + Vignette ──────────────────────
-    ctx.fillStyle = PALETTE.bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    // ── 1. Background + Satellite Map Transparency + Vignette ────────────
     if (this.showSatelliteMode) {
-      this._drawSatelliteTerrain(ctx, cols, rows, cs, ox, oy);
+      // Clear canvas so MapLibre GL JS live satellite map renders underneath
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle edge vignette to blend satellite terrain into floating dark panels
+      const vcx = canvas.width / 2, vcy = canvas.height / 2;
+      const vg = ctx.createRadialGradient(vcx, vcy, Math.min(canvas.width, canvas.height) * 0.32, vcx, vcy, Math.max(canvas.width, canvas.height) * 0.72);
+      vg.addColorStop(0, 'transparent');
+      vg.addColorStop(1, 'rgba(8, 14, 28, 0.60)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Tactical Satellite Radar HUD Tick Marks & Lat/Lon Overlays
+      this._drawSatelliteTacticalOverlay(ctx, cols, rows, cs, ox, oy);
     } else {
+      // Dark cybernetic tactical background
+      ctx.fillStyle = PALETTE.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       this._drawNoiseBackground(ctx, canvas);
     }
-
-    // Vignette
-    const vcx = canvas.width / 2, vcy = canvas.height / 2;
-    const vg = ctx.createRadialGradient(vcx, vcy, 0, vcx, vcy, Math.max(canvas.width, canvas.height) * 0.7);
-    vg.addColorStop(0, 'transparent');
-    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // ── 2. Pheromone heatmap (offscreen + bloom) ─────────────────────────
     this._drawHeatmap(ctx, cols, rows, cs, ox, oy);
@@ -298,79 +291,59 @@ export class Visualizer {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  // ─── Procedural Satellite Aerial Image Renderer ───────────────────────────
+  // ─── Tactical Satellite Radar HUD Overlay ─────────────────────────────────
 
-  _drawSatelliteTerrain(ctx, cols, rows, cs, ox, oy) {
+  _drawSatelliteTacticalOverlay(ctx, cols, rows, cs, ox, oy) {
     const W = cols * cs;
     const H = rows * cs;
 
-    // Cache satellite canvas at exact pixel dimensions
-    if (!this._satelliteCanvas || this._satelliteCanvas.width !== Math.round(W) || this._satelliteCanvas.height !== Math.round(H)) {
-      this._satelliteCanvas = document.createElement('canvas');
-      this._satelliteCanvas.width  = Math.round(W);
-      this._satelliteCanvas.height = Math.round(H);
-      const sctx = this._satelliteCanvas.getContext('2d');
+    ctx.save();
+    // Lat/Lon coordinate ticks along borders matching SF Financial District coordinates
+    ctx.strokeStyle = 'rgba(76, 201, 240, 0.28)';
+    ctx.lineWidth = 1;
+    ctx.font = `600 ${Math.max(9, cs * 0.28)}px 'Space Mono', monospace`;
+    ctx.fillStyle = 'rgba(76, 201, 240, 0.55)';
 
-      // Draw the realistic generated satellite image
-      if (this.satelliteImgLoaded && this.satelliteImg) {
-        sctx.drawImage(this.satelliteImg, 0, 0, W, H);
-      } else {
-        // Fallback dark terrain if image hasn't loaded yet
-        sctx.fillStyle = '#0b1410';
-        sctx.fillRect(0, 0, W, H);
-      }
-
-      // Tactical Satellite Radar HUD Tick Marks & Telemetry Overlays
-      sctx.strokeStyle = 'rgba(76, 201, 240, 0.22)';
-      sctx.lineWidth = 1;
-      sctx.font = `600 ${Math.max(9, cs * 0.28)}px 'Space Mono', monospace`;
-      sctx.fillStyle = 'rgba(76, 201, 240, 0.45)';
-
-      // Lat/Lon coordinate ticks along borders
-      for (let c = 2; c < cols; c += 4) {
-        const px = c * cs;
-        sctx.beginPath();
-        sctx.moveTo(px, 0); sctx.lineTo(px, 6);
-        sctx.moveTo(px, H); sctx.lineTo(px, H - 6);
-        sctx.stroke();
-        sctx.fillText(`34°05'${10 + c}"N`, px + 2, 14);
-      }
-      for (let r = 2; r < rows; r += 4) {
-        const py = r * cs;
-        sctx.beginPath();
-        sctx.moveTo(0, py); sctx.lineTo(6, py);
-        sctx.moveTo(W, py); sctx.lineTo(W - 6, py);
-        sctx.stroke();
-        sctx.fillText(`118°24'${20 + r}"W`, 8, py - 3);
-      }
-
-      // Satellite Crosshairs in 4 corners
-      const chSize = cs * 0.8;
-      const corners = [
-        { x: cs, y: cs },
-        { x: W - cs, y: cs },
-        { x: cs, y: H - cs },
-        { x: W - cs, y: H - cs },
-      ];
-      sctx.strokeStyle = 'rgba(76, 201, 240, 0.35)';
-      for (const cr of corners) {
-        sctx.beginPath();
-        sctx.moveTo(cr.x - chSize, cr.y); sctx.lineTo(cr.x + chSize, cr.y);
-        sctx.moveTo(cr.x, cr.y - chSize); sctx.lineTo(cr.x, cr.y + chSize);
-        sctx.stroke();
-        sctx.beginPath();
-        sctx.arc(cr.x, cr.y, Math.max(1, Math.abs(chSize * 0.5)), 0, Math.PI * 2);
-        sctx.stroke();
-      }
-
-      // Satellite watermark header
-      sctx.font = `700 ${Math.max(9.5, cs * 0.34)}px 'Space Mono', monospace`;
-      sctx.fillStyle = 'rgba(76, 201, 240, 0.45)';
-      sctx.fillText('📡 SATELLITE AERIAL RECON MODE // HIGH-RES OPTICAL FOV', cs * 0.5, H - cs * 0.4);
+    for (let c = 2; c < cols; c += 5) {
+      const px = ox + c * cs;
+      ctx.beginPath();
+      ctx.moveTo(px, oy); ctx.lineTo(px, oy + 5);
+      ctx.moveTo(px, oy + H); ctx.lineTo(px, oy + H - 5);
+      ctx.stroke();
+      ctx.fillText(`37°47'${(25 + c * 0.8).toFixed(1)}"N`, px + 2, oy + 13);
+    }
+    for (let r = 2; r < rows; r += 4) {
+      const py = oy + r * cs;
+      ctx.beginPath();
+      ctx.moveTo(ox, py); ctx.lineTo(ox + 5, py);
+      ctx.moveTo(ox + W, py); ctx.lineTo(ox + W - 5, py);
+      ctx.stroke();
+      ctx.fillText(`122°23'${(50 + r * 0.9).toFixed(1)}"W`, ox + 7, py - 3);
     }
 
-    // Render cached satellite canvas onto main canvas
-    ctx.drawImage(this._satelliteCanvas, ox, oy, W, H);
+    // Tactical Corner Crosshairs
+    const ch = Math.min(14, cs * 0.5);
+    const corners = [
+      { x: ox, y: oy },
+      { x: ox + W, y: oy },
+      { x: ox, y: oy + H },
+      { x: ox + W, y: oy + H }
+    ];
+    ctx.strokeStyle = 'rgba(76, 201, 240, 0.45)';
+    for (const { x, y } of corners) {
+      const dx = x === ox ? 1 : -1;
+      const dy = y === oy ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(x, y); ctx.lineTo(x + dx * ch, y);
+      ctx.moveTo(x, y); ctx.lineTo(x, y + dy * ch);
+      ctx.stroke();
+    }
+
+    // Watermark tag in bottom-left
+    ctx.font = `600 ${Math.max(9, cs * 0.26)}px 'Space Mono', monospace`;
+    ctx.fillStyle = 'rgba(76, 201, 240, 0.40)';
+    ctx.fillText('🛰️ LIVE SATELLITE RECON // MAPLIBRE GL JS (SUB-METER ESRI IMAGERY)', ox + 8, oy + H - 8);
+    ctx.restore();
   }
 
   // ─── Swarm Attention Shift & Focus Target Visualizer ─────────────────────
