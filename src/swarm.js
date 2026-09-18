@@ -59,6 +59,10 @@ export class Swarm {
     this.missionScore = 0;
     this.survivorsExtracted = 0;
     this.survivorTargets = this.sensors.scenario.survivors.map(s => ({ ...s, status: 'SEARCHING', confidence: 0 }));
+
+    // NOOA Multi-Agent Tactical Negotiation State (Non-blocking & Deduplicated)
+    this._activeNOOASectors = new Set();
+    this._nooaInFlightCount = 0;
   }
 
   /**
@@ -146,6 +150,8 @@ export class Swarm {
       roleCounts: { SCOUT: 0, RELAY: 0, SENTINEL: 0 },
       dominantRegime: 'SPREAD',
     };
+    this._activeNOOASectors.clear();
+    this._nooaInFlightCount = 0;
     this.field.reset();
   }
 
@@ -359,8 +365,12 @@ export class Swarm {
           // Clear throttle every 60 ticks so events can repeat
           if (this.tick % 60 === 0) this._debateLogThrottle.clear();
 
-          if (msg.type === 'CANDIDATE_PROPOSAL' && msg.confidence >= 0.35) {
+          if (msg.type === 'CANDIDATE_PROPOSAL' && msg.confidence >= 0.40) {
             this._addEvent('📢', `Agent ${msg.callsign} → ALL: "I'm reading ${(msg.confidence * 100).toFixed(0)}% tri-modal signal at (${msg.col},${msg.row}). Requesting verification from nearby agents."`);
+            // Sparse NOOA Negotiation Gate (Ambiguous Band: 0.40 <= C < 0.75)
+            if (msg.confidence < 0.75) {
+              this._dispatchNOOANegotiation(sender, msg.col, msg.row, msg.confidence);
+            }
           }
         }
       }
@@ -672,7 +682,74 @@ export class Swarm {
     if (this.eventLog.length > this._maxEvents) this.eventLog.pop();
   }
 
-      stepN(n) {
-        for (let i = 0; i < n; i++) this.step();
-      }
-    }
+  /**
+   * Asynchronous NOOA Multi-Agent Tactical Negotiation Dispatch
+   * - Deterministic Cluster Lead: Lowest Drone ID in 6.0-unit local bubble
+   * - Non-blocking: Fire-and-forget fetch with 400ms abort controller timeout
+   * - In-flight Concurrency Cap: Max 2 concurrent requests fleet-wide
+   * - Safe Fallback: Drops silently to existing deterministic voting on error/timeout
+   */
+  _dispatchNOOANegotiation(proposer, col, row, candidateConf) {
+    if (this._nooaInFlightCount >= 2) return;
+    const sectorKey = `${col},${row}`;
+    if (this._activeNOOASectors && this._activeNOOASectors.has(sectorKey)) return;
+
+    // Deterministic Cluster Lead Election: lowest drone ID in radio bubble
+    const localPeers = this.drones.filter(d => Math.hypot(d.x - (col + 0.5), d.y - (row + 0.5)) <= 6.0);
+    if (localPeers.length === 0) return;
+    const leadDrone = localPeers.reduce((min, d) => d.id < min.id ? d : min, localPeers[0]);
+
+    // Only the deterministically elected cluster lead dispatches the request
+    if (proposer.id !== leadDrone.id) return;
+
+    if (!this._activeNOOASectors) this._activeNOOASectors = new Set();
+    this._activeNOOASectors.add(sectorKey);
+    this._nooaInFlightCount = (this._nooaInFlightCount || 0) + 1;
+
+    const peerAngles = localPeers.map(p => p.heading);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2000ms safety timeout for local Nemotron LLM
+
+    const payload = {
+      agent_id: proposer.id,
+      callsign: proposer.callsign,
+      sector: `(${col}, ${row})`,
+      confidence: candidateConf,
+      readings: proposer.lastReadings,
+      peer_angles: peerAngles,
+    };
+
+    fetch('/api/nooa/negotiate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+      .then(res => res.json())
+      .then(data => {
+        clearTimeout(timeoutId);
+        this._nooaInFlightCount = Math.max(0, this._nooaInFlightCount - 1);
+        setTimeout(() => this._activeNOOASectors.delete(sectorKey), 3000); // 3s cooldown
+
+        if (data && data.is_valid && data.decision) {
+          if (data.decision === 'CONFIRM') {
+            this._addEvent('🤖', `[NOOA NEGOTIATOR] ${data.reasoning}`);
+            this.field.deposit(col, row, 0.40, proposer.id, data.confidence, 0.05);
+          } else if (data.decision === 'REJECT') {
+            this._addEvent('🙅', `[NOOA NEGOTIATOR] ${data.reasoning}`);
+            this.field.clearLocalAttraction(col, row, 3.0, false);
+          }
+        }
+      })
+      .catch(() => {
+        clearTimeout(timeoutId);
+        this._nooaInFlightCount = Math.max(0, this._nooaInFlightCount - 1);
+        this._activeNOOASectors.delete(sectorKey);
+        // Silent deterministic fallback: existing swarm peer debate handles it
+      });
+  }
+
+  stepN(n) {
+    for (let i = 0; i < n; i++) this.step();
+  }
+}

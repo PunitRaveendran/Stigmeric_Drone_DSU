@@ -166,14 +166,17 @@ export class Drone {
    * @returns {'SCOUT'|'RELAY'|'SENTINEL'}
    */
   determineRole(meshContext = {}) {
-    // 1. Sentinel Role — Battery-triggered (low resource threshold)
-    if (this.battery <= 20) {
-      this.role = 'SENTINEL';
+    const isBridging = Boolean(meshContext.isBridge);
+
+    // 1. Battery <= 25% overrides normal scouting
+    if (this.battery <= 25) {
+      this.role = isBridging ? 'RELAY' : 'SENTINEL';
+      if (this.role === 'RELAY') this.altitude = 35;
       return this.role;
     }
 
-    // 2. Relay Role — Mesh topology bridge (connects separated clusters, non-explorers only)
-    if (meshContext.isBridge && this.curiosityRole !== 'EXPLORER') {
+    // 2. Mesh topology bridge (connects separated clusters)
+    if (isBridging && this.curiosityRole !== 'EXPLORER') {
       this.role = 'RELAY';
       this.altitude = 35; // Elevate to top RF relay ceiling
       return this.role;
