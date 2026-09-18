@@ -122,9 +122,12 @@ class SARSwarmAgent:
                     timestamp=time.time(),
                 )
 
-        # 2. Multi-angle vantage cross-verification
-        # If peer verifiers observed the target from diverse approach vectors (angular separation >= 45 deg),
-        # multi-modal camera/audio alignment is confirmed.
+        # 2. Try Real NVIDIA Nemotron Local LLM Inference (Port 8081)
+        nemotron_decision = await self._query_nemotron(sector_coords, readings, peer_angles, base_confidence)
+        if nemotron_decision is not None:
+            return nemotron_decision
+
+        # 3. Fallback: Multi-angle vantage geometric cross-verification
         angle_diversity = 0.0
         if len(peer_angles) >= 2:
             diffs = [abs(peer_angles[i] - peer_angles[j]) for i in range(len(peer_angles)) for j in range(i + 1, len(peer_angles))]
@@ -157,3 +160,55 @@ class SARSwarmAgent:
         }
 
         return validate_and_coerce_decision(raw_payload, fallback_confidence=base_confidence)
+
+    async def _query_nemotron(
+        self,
+        sector: str,
+        readings: SensorReading,
+        peer_angles: List[float],
+        base_confidence: float
+    ) -> Optional[TargetDebateDecision]:
+        """
+        Queries local NVIDIA Nemotron GGUF server via OpenAI-compatible API.
+        Returns None on timeout/offline to trigger deterministic fallback.
+        """
+        import urllib.request
+        import json
+
+        prompt = (
+            f"You are Autonomous SAR Swarm Agent {self.callsign} running NVIDIA NOOA.\n"
+            f"Candidate Target Sector: {sector}\n"
+            f"Sensors: YOLO Human Camera={readings.camera:.2f}, YAMNet Distress Audio={readings.audio:.2f}, "
+            f"Thermal={readings.thermal:.2f}, Toxic Gas={readings.gas:.2f}\n"
+            f"Peer Verifiers: {len(peer_angles)} nearby drones with approach angles {peer_angles}\n"
+            f"Base Confidence: {base_confidence:.2f}\n\n"
+            f"Task: Evaluate if this is a genuine survivor or a single-channel decoy (e.g. hot debris/wind).\n"
+            f"Return ONLY valid JSON: {{\"decision\": \"CONFIRM\"|\"REJECT\"|\"UNCERTAIN\", \"confidence\": float (0.0-1.0), \"reasoning\": \"concise 1-sentence explanation\"}}"
+        )
+
+        payload = {
+            "messages": [
+                {"role": "system", "content": "You are an autonomous disaster SAR swarm tactical negotiator. Output strict JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.1,
+            "max_tokens": 120,
+            "response_format": {"type": "json_object"}
+        }
+
+        try:
+            req = urllib.request.Request(
+                "http://127.0.0.1:8081/v1/chat/completions",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            # 1.8s timeout for local Nemotron response
+            with urllib.request.urlopen(req, timeout=1.8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                content = data["choices"][0]["message"]["content"]
+                # Parse JSON string from LLM output
+                parsed = json.loads(content.strip())
+                return validate_and_coerce_decision(parsed, fallback_confidence=base_confidence)
+        except Exception:
+            return None

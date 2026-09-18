@@ -708,7 +708,7 @@ export class Swarm {
 
     const peerAngles = localPeers.map(p => p.heading);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 400); // 400ms safety timeout
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2000ms safety timeout for local Nemotron LLM
 
     const payload = {
       agent_id: proposer.id,
