@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>PROTOPLASM // Cinematic Drone Swarm Search Launch</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #02040a;
+        color: #e2e8f0;
+        font-family: 'Space Grotesk', sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        background: radial-gradient(circle at 50% 50%, #081126 0%, #020409 100%);
+        overflow: hidden;
+      }
+
+      /* Drone Swarm Simulation Canvas */
+      #swarmCanvas {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        z-index: 1;
+      }
+
+      /* Sci-Fi CRT / Scanline & Vignette Effect */
+      .vignette-overlay {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at center, transparent 50%, rgba(2, 4, 10, 0.85) 100%);
+        pointer-events: none;
+        z-index: 5;
+      }
+      .scanlines {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+        background-size: 100% 4px;
+        pointer-events: none;
+        opacity: 0.4;
+        z-index: 6;
+      }
+
+      /* HUD Frame & Tactical Corners */
+      .hud-frame {
+        position: absolute;
+        inset: 30px;
+        border: 1px solid rgba(0, 240, 255, 0.15);
+        pointer-events: none;
+        z-index: 10;
+      }
+      .corner-tl { position: absolute; top: 20px; left: 20px; width: 30px; height: 30px; border-top: 3px solid #00f0ff; border-left: 3px solid #00f0ff; z-index: 11; }
+      .corner-tr { position: absolute; top: 20px; right: 20px; width: 30px; height: 30px; border-top: 3px solid #00f0ff; border-right: 3px solid #00f0ff; z-index: 11; }
+      .corner-bl { position: absolute; bottom: 20px; left: 20px; width: 30px; height: 30px; border-bottom: 3px solid #00f0ff; border-left: 3px solid #00f0ff; z-index: 11; }
+      .corner-br { position: absolute; bottom: 20px; right: 20px; width: 30px; height: 30px; border-bottom: 3px solid #00f0ff; border-right: 3px solid #00f0ff; z-index: 11; }
+
+      /* Top HUD Header */
+      .hud-header {
+        position: absolute;
+        top: 45px;
+        left: 60px;
+        right: 60px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+        padding-bottom: 16px;
+        font-family: 'Space Mono', monospace;
+        font-size: 15px;
+        color: #00f0ff;
+        letter-spacing: 2px;
+        z-index: 15;
+      }
+      .hud-badge-container {
+        display: flex;
+        gap: 12px;
+      }
+      .badge-danger {
+        background: rgba(255, 0, 85, 0.15);
+        border: 1px solid #ff0055;
+        color: #ff5588;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: 700;
+        font-size: 12px;
+      }
+      .badge-nvidia {
+        background: rgba(118, 185, 0, 0.15);
+        border: 1px solid #76b900;
+        color: #8edc00;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: 700;
+        font-size: 12px;
+      }
+      .badge-cyan {
+        background: rgba(0, 240, 255, 0.12);
+        border: 1px solid #00f0ff;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: 700;
+        font-size: 12px;
+      }
+
+      /* Live Swarm Telemetry Sidebar */
+      .telemetry-panel {
+        position: absolute;
+        top: 130px;
+        left: 60px;
+        width: 320px;
+        background: rgba(5, 12, 28, 0.75);
+        border: 1px solid rgba(0, 240, 255, 0.25);
+        border-radius: 8px;
+        padding: 18px;
+        font-family: 'Space Mono', monospace;
+        font-size: 12px;
+        line-height: 1.8;
+        color: #94a3b8;
+        z-index: 30;
+        backdrop-filter: blur(8px);
+      }
+      .telemetry-title {
+        color: #00f0ff;
+        font-weight: 700;
+        border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+        padding-bottom: 6px;
+        margin-bottom: 10px;
+        letter-spacing: 1px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .telemetry-val {
+        color: #00ffaa;
+        font-weight: 700;
+        float: right;
+      }
+
+      /* Scene Containers */
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 20;
+      }
+
+      /* Scene 1: The Crisis Callout */
+      .cinematic-box {
+        background: rgba(4, 8, 20, 0.88);
+        border: 1px solid rgba(0, 240, 255, 0.5);
+        border-radius: 16px;
+        padding: 50px 70px;
+        max-width: 1180px;
+        box-shadow: 0 0 80px rgba(0, 240, 255, 0.2), inset 0 0 30px rgba(0, 240, 255, 0.05);
+        text-align: center;
+        backdrop-filter: blur(12px);
+      }
+      .hook-tag {
+        font-family: 'Space Mono', monospace;
+        font-size: 18px;
+        color: #ff3377;
+        letter-spacing: 5px;
+        margin-bottom: 18px;
+        font-weight: 700;
+      }
+      .hook-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 52px;
+        font-weight: 900;
+        line-height: 1.25;
+        letter-spacing: 1px;
+        color: #ffffff;
+        text-shadow: 0 0 30px rgba(0, 240, 255, 0.6);
+      }
+
+      /* Scene 2: Stigmergy Engine */
+      .stigmergy-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        width: 1200px;
+      }
+      .feature-card {
+        background: rgba(7, 15, 36, 0.88);
+        border: 1px solid rgba(0, 240, 255, 0.35);
+        border-radius: 12px;
+        padding: 30px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 40px rgba(0, 240, 255, 0.12);
+        position: relative;
+        overflow: hidden;
+      }
+      .feature-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: linear-gradient(90deg, #00f0ff, #00ffaa);
+      }
+      .card-label {
+        font-family: 'Space Mono', monospace;
+        font-size: 13px;
+        color: #94a3b8;
+        letter-spacing: 2px;
+      }
+      .card-metric {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 38px;
+        font-weight: 800;
+        color: #00f0ff;
+        margin: 12px 0 6px;
+      }
+      .card-desc {
+        font-size: 15px;
+        color: #cbd5e1;
+        line-height: 1.5;
+      }
+
+      /* Scene 3: NVIDIA NOOA Multi-Agent Debate HUD */
+      .target-lock-card {
+        width: 1140px;
+        background: rgba(8, 16, 38, 0.92);
+        border: 2px solid #76b900;
+        border-radius: 16px;
+        padding: 40px 50px;
+        box-shadow: 0 0 70px rgba(118, 185, 0, 0.3);
+        backdrop-filter: blur(14px);
+      }
+      .lock-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(118, 185, 0, 0.3);
+        padding-bottom: 18px;
+        margin-bottom: 24px;
+      }
+      .lock-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 24px;
+        font-weight: 800;
+        color: #8edc00;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .speech-bubble {
+        background: rgba(4, 7, 16, 0.7);
+        border-left: 4px solid #76b900;
+        padding: 24px 30px;
+        border-radius: 8px;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 28px;
+        line-height: 1.4;
+        color: #ffffff;
+        margin-bottom: 24px;
+      }
+      .lock-footer {
+        display: flex;
+        justify-content: space-between;
+        font-family: 'Space Mono', monospace;
+        font-size: 15px;
+        color: #8edc00;
+      }
+
+      /* Scene 4: Climax & Outro */
+      .outro-container {
+        text-align: center;
+      }
+      .logo-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 108px;
+        font-weight: 900;
+        letter-spacing: 6px;
+        background: linear-gradient(135deg, #ffffff 0%, #00f0ff 50%, #76b900 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 12px;
+        text-shadow: 0 0 50px rgba(0, 240, 255, 0.5);
+      }
+      .logo-subtitle {
+        font-family: 'Space Mono', monospace;
+        font-size: 24px;
+        font-weight: 700;
+        color: #00ffaa;
+        letter-spacing: 6px;
+        margin-bottom: 36px;
+      }
+      .spec-pills {
+        display: flex;
+        gap: 18px;
+        justify-content: center;
+        margin-bottom: 40px;
+      }
+      .pill {
+        background: rgba(0, 240, 255, 0.1);
+        border: 1px solid #00f0ff;
+        padding: 14px 28px;
+        border-radius: 40px;
+        font-family: 'Space Mono', monospace;
+        font-size: 16px;
+        font-weight: 700;
+        color: #00f0ff;
+        backdrop-filter: blur(8px);
+      }
+      .pill-nvidia {
+        background: rgba(118, 185, 0, 0.12);
+        border-color: #76b900;
+        color: #8edc00;
+      }
+      .repo-cta {
+        font-family: 'Space Mono', monospace;
+        font-size: 18px;
+        color: #cbd5e1;
+        letter-spacing: 2px;
+        background: rgba(5, 12, 28, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        display: inline-block;
+        padding: 12px 32px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="20"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- Real-time Tactical Drone Swarm Simulation Canvas -->
+      <canvas id="swarmCanvas" width="1920" height="1080"></canvas>
+
+      <div class="vignette-overlay"></div>
+      <div class="scanlines"></div>
+
+      <!-- Sci-Fi HUD Corners -->
+      <div class="hud-frame"></div>
+      <div class="corner-tl"></div>
+      <div class="corner-tr"></div>
+      <div class="corner-bl"></div>
+      <div class="corner-br"></div>
+
+      <!-- Top HUD Header -->
+      <div class="hud-header">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <span style="font-weight: 700; font-size: 17px;">PROTOPLASM</span>
+          <span style="color: #00f0ff;">//</span>
+          <span>AUTONOMOUS SWARM SEARCH OPS</span>
+        </div>
+        <div class="hud-badge-container">
+          <span class="badge-danger">GPS: OFFLINE (0%)</span>
+          <span class="badge-nvidia">NVIDIA NEMOTRON NOOA</span>
+          <span class="badge-cyan">24 DRONES ACTIVE</span>
+        </div>
+      </div>
+
+      <!-- Left Live Telemetry HUD -->
+      <div class="telemetry-panel" data-layout-allow-occlusion>
+        <div class="telemetry-title">
+          <span>MISSION TELEMETRY</span>
+          <span style="color: #00ffaa;">LIVE</span>
+        </div>
+        <div>SWARM COORDINATION: <span class="telemetry-val">DIGITAL STIGMERGY</span></div>
+        <div>FIELD DIFFUSION PDE: <span class="telemetry-val">60 FPS // 0ms</span></div>
+        <div>RF MESH AD-HOC: <span class="telemetry-val">SELF-HEALING (99.8%)</span></div>
+        <div>RADAR SWEEP ANGLE: <span id="radarDeg" class="telemetry-val">000°</span></div>
+        <div>SURVIVORS TARGETED: <span id="survivorCount" class="telemetry-val">SCANNING...</span></div>
+        <div>LOCAL LLM LATENCY: <span class="telemetry-val">1.4ms (ON-EDGE)</span></div>
+      </div>
+
+      <!-- Scene 1: The Crisis (0s - 4.8s) -->
+      <div id="scene1" class="scene">
+        <div class="cinematic-box">
+          <div class="hook-tag">TACTICAL SEARCH & RESCUE CRISIS</div>
+          <h1 class="hook-title">
+            WHEN DISASTERS CRUSH ALL COMMS & GPS...<br />
+            <span style="color: #00f0ff;">24 AUTONOMOUS DRONES</span> UNLEASH TO SAVE LIVES.
+          </h1>
+          <div style="margin-top: 24px; font-family: 'Space Mono', monospace; font-size: 16px; color: #cbd5e1;">
+            Zero Infrastructure · Zero Human Pilot Overhead · 100% Emergent Swarm Intelligence
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 2: Digital Stigmergy & Mesh (5.0s - 9.8s) -->
+      <div id="scene2" class="scene">
+        <div style="font-family: 'Space Mono', monospace; color: #00f0ff; letter-spacing: 4px; font-size: 18px; margin-bottom: 24px; font-weight: 700;">
+          CORE INNOVATION // DIGITAL PHEROMONE FIELD THEORY
+        </div>
+        <div class="stigmergy-grid">
+          <div class="feature-card">
+            <div class="card-label">SCALAR POTENTIAL DIFFUSION</div>
+            <div class="card-metric">0ms</div>
+            <div class="card-desc">Continuous PDE field updates prevent clustering and guarantee complete subterranean coverage.</div>
+          </div>
+          <div class="feature-card">
+            <div class="card-label">DUAL-AXIS ROLE DYNAMICS</div>
+            <div class="card-metric">SCOUT ↔ RELAY</div>
+            <div class="card-desc">Drones seamlessly elevate to +35m to bridge RF deadzones across rugged rubble.</div>
+          </div>
+          <div class="feature-card">
+            <div class="card-label">TRI-MODAL SENSOR FUSION</div>
+            <div class="card-metric">YOLO + YAMNet</div>
+            <div class="card-desc">Thermal, visual, and acoustic acoustic neural embeddings fused directly on edge drones.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 3: NVIDIA NOOA Debate & False Decoy Rejection (10.0s - 14.8s) -->
+      <div id="scene3" class="scene">
+        <div class="target-lock-card">
+          <div class="lock-header">
+            <div class="lock-title">
+              <span style="font-size: 32px;">🎯</span>
+              <span>NVIDIA OBJECT-ORIENTED AGENT (NOOA) // NEMOTRON-3-NANO</span>
+            </div>
+            <div style="font-family: 'Space Mono', monospace; font-size: 14px; color: #8edc00; background: rgba(118, 185, 0, 0.15); padding: 6px 16px; border-radius: 4px; border: 1px solid #76b900;">
+              SURVIVOR CONFIRMED // SECTOR 14-B
+            </div>
+          </div>
+          <div class="speech-bubble">
+            "Agent ALPHA-03 to Swarm: Dual-aspect visual corroborates YAMNet distress acoustic signature (94.2%). Single-point thermal decoy REJECTED. Commencing precision rescue relay."
+          </div>
+          <div class="lock-footer">
+            <span>LLM CONSENSUS: UNANIMOUS</span>
+            <span>SPATIAL CONFLICT DEBATE: RESOLVED (2.1s)</span>
+            <span>DECOY MITIGATION: 100%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4: Title & Outro (15.0s - 20.0s) -->
+      <div id="scene4" class="scene">
+        <div class="outro-container">
+          <h1 class="logo-title">PROTOPLASM</h1>
+          <div class="logo-subtitle">AUTONOMOUS STIGMERGIC SEARCH & RESCUE DRONE SWARM</div>
+          <div class="spec-pills">
+            <div class="pill">⚡ 100% Decentralized</div>
+            <div class="pill pill-nvidia">🧠 NVIDIA Nemotron Agent</div>
+            <div class="pill">🛸 Self-Healing RF Mesh</div>
+            <div class="pill">🛰️ GPS-Denied Navigation</div>
+          </div>
+          <div class="repo-cta">
+            github.com/PunitRaveendran/Stigmeric_Drone_DSU
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Initialize Canvas & Tactical Swarm Simulation
+      const canvas = document.getElementById("swarmCanvas");
+      const ctx = canvas.getContext("2d");
+      const radarDegEl = document.getElementById("radarDeg");
+      const survivorCountEl = document.getElementById("survivorCount");
+
+      // Deterministic PRNG
+      function pseudoRandom(seed) {
+        const s = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+        return s - Math.floor(s);
+      }
+
+      // Generate 24 Drones with realistic deterministic search patterns
+      const DRONE_COUNT = 24;
+      const drones = [];
+      const targets = [
+        { x: 1420, y: 380, label: "SURVIVOR-ALPHA", discovered: false, confidence: 0.94 },
+        { x: 520, y: 720, label: "SURVIVOR-BRAVO", discovered: false, confidence: 0.89 },
+        { x: 1100, y: 820, label: "THERMAL DECOY", discovered: false, isDecoy: true }
+      ];
+
+      for (let i = 0; i < DRONE_COUNT; i++) {
+        const angle = (i / DRONE_COUNT) * Math.PI * 2;
+        const radius = 250 + pseudoRandom(i + 1) * 350;
+        drones.push({
+          id: `DRONE-${String(i + 1).padStart(2, '0')}`,
+          baseX: 960 + Math.cos(angle) * radius,
+          baseY: 540 + Math.sin(angle) * radius,
+          freqX: 0.4 + (i % 5) * 0.15,
+          freqY: 0.3 + ((i + 2) % 4) * 0.12,
+          ampX: 120 + (i % 4) * 40,
+          ampY: 90 + (i % 3) * 35,
+          phase: (i * Math.PI) / 6,
+          isRelay: i % 6 === 0,
+          heading: 0
+        });
+      }
+
+      // Simulation State for GSAP scrub
+      const simState = { time: 0 };
+
+      function renderSwarm(t) {
+        ctx.clearRect(0, 0, 1920, 1080);
+
+        // 1. Draw Tactical Grid
+        ctx.strokeStyle = "rgba(0, 240, 255, 0.04)";
+        ctx.lineWidth = 1;
+        const gridSize = 60;
+        for (let x = 0; x < 1920; x += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, 1080);
+          ctx.stroke();
+        }
+        for (let y = 0; y < 1080; y += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(1920, y);
+          ctx.stroke();
+        }
+
+        // 2. Draw Radar Sweep Beam
+        const radarAngle = (t * 1.5) % (Math.PI * 2);
+        const radarDegrees = Math.floor((radarAngle / (Math.PI * 2)) * 360);
+        if (radarDegEl) {
+          radarDegEl.innerText = `${String(radarDegrees).padStart(3, '0')}°`;
+        }
+
+        ctx.save();
+        ctx.translate(960, 540);
+        ctx.strokeStyle = "rgba(0, 240, 255, 0.12)";
+        ctx.beginPath();
+        ctx.arc(0, 0, 450, 0, Math.PI * 2);
+        ctx.arc(0, 0, 700, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const grad = ctx.createConicGradient(radarAngle, 0, 0);
+        grad.addColorStop(0, "rgba(0, 240, 255, 0.18)");
+        grad.addColorStop(0.15, "rgba(0, 240, 255, 0)");
+        grad.addColorStop(1, "rgba(0, 240, 255, 0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 850, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 3. Compute Drone Positions at time t
+        const currentPositions = drones.map(d => {
+          const x = d.baseX + Math.sin(t * d.freqX + d.phase) * d.ampX + Math.cos(t * 0.2) * 50;
+          const y = d.baseY + Math.cos(t * d.freqY + d.phase) * d.ampY + Math.sin(t * 0.25) * 40;
+          return { ...d, x, y };
+        });
+
+        // 4. Draw RF Mesh Links between nearby drones (Self-healing network)
+        ctx.lineWidth = 1;
+        for (let i = 0; i < currentPositions.length; i++) {
+          for (let j = i + 1; j < currentPositions.length; j++) {
+            const d1 = currentPositions[i];
+            const d2 = currentPositions[j];
+            const dist = Math.hypot(d1.x - d2.x, d1.y - d2.y);
+            if (dist < 320) {
+              const alpha = (1 - dist / 320) * 0.45;
+              ctx.strokeStyle = d1.isRelay || d2.isRelay ? `rgba(255, 214, 10, ${alpha})` : `rgba(0, 240, 255, ${alpha})`;
+              ctx.beginPath();
+              ctx.moveTo(d1.x, d1.y);
+              ctx.lineTo(d2.x, d2.y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // 5. Draw Target Heat Signatures & Survivors
+        targets.forEach(target => {
+          const isTargetScene = t >= 9.0;
+          const pulse = Math.sin(t * 6) * 6;
+
+          // Target glow
+          const tGrad = ctx.createRadialGradient(target.x, target.y, 2, target.x, target.y, 35 + pulse);
+          if (target.isDecoy) {
+            tGrad.addColorStop(0, "rgba(255, 80, 0, 0.8)");
+            tGrad.addColorStop(1, "rgba(255, 80, 0, 0)");
+          } else {
+            tGrad.addColorStop(0, "rgba(0, 255, 170, 0.9)");
+            tGrad.addColorStop(1, "rgba(0, 255, 170, 0)");
+          }
+          ctx.fillStyle = tGrad;
+          ctx.beginPath();
+          ctx.arc(target.x, target.y, 35 + pulse, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Target Bounding Box & HUD Lock
+          if (isTargetScene) {
+            ctx.strokeStyle = target.isDecoy ? "rgba(255, 80, 0, 0.7)" : "#8edc00";
+            ctx.lineWidth = 2;
+            const sz = 28;
+            ctx.strokeRect(target.x - sz, target.y - sz, sz * 2, sz * 2);
+
+            ctx.font = "11px 'Space Mono', monospace";
+            ctx.fillStyle = target.isDecoy ? "#ff5000" : "#8edc00";
+            ctx.fillText(target.label, target.x - sz, target.y - sz - 6);
+          }
+        });
+
+        if (survivorCountEl) {
+          if (t < 5) survivorCountEl.innerText = "SCANNING...";
+          else if (t < 10) survivorCountEl.innerText = "2 CANDIDATES";
+          else survivorCountEl.innerText = "2 CONFIRMED (1 DECOY REJECTED)";
+        }
+
+        // 6. Draw Drone Agents, Search Cones, and Pheromone Trails
+        currentPositions.forEach((d, idx) => {
+          const scanAngle = t * 2 + d.phase;
+          const scanDist = 120;
+
+          // Search Laser Cone
+          ctx.save();
+          ctx.translate(d.x, d.y);
+          ctx.rotate(scanAngle);
+          const coneGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, scanDist);
+          coneGrad.addColorStop(0, d.isRelay ? "rgba(255, 214, 10, 0.4)" : "rgba(0, 240, 255, 0.35)");
+          coneGrad.addColorStop(1, "rgba(0, 240, 255, 0)");
+          ctx.fillStyle = coneGrad;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.arc(0, 0, scanDist, -Math.PI / 6, Math.PI / 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          // Drone Core Glyph
+          ctx.fillStyle = d.isRelay ? "#ffd60a" : "#00f0ff";
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, d.isRelay ? 5 : 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Glow Halo
+          ctx.strokeStyle = d.isRelay ? "rgba(255, 214, 10, 0.6)" : "rgba(0, 240, 255, 0.5)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, 8 + Math.sin(t * 4 + idx) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Drone Tag (every 3rd drone)
+          if (idx % 3 === 0) {
+            ctx.font = "9px 'Space Mono', monospace";
+            ctx.fillStyle = "rgba(0, 240, 255, 0.7)";
+            ctx.fillText(d.id, d.x + 10, d.y - 8);
+          }
+        });
+      }
+
+      // GSAP Master Timeline
+      const tl = gsap.timeline({ paused: true });
+
+      // Continuous Simulation Driver via GSAP Proxy
+      tl.to(simState, {
+        time: 20,
+        duration: 20,
+        ease: "none",
+        onUpdate: () => {
+          renderSwarm(simState.time);
+        }
+      }, 0);
+
+      // Scene 1: The Crisis (0.0s - 4.8s)
+      tl.fromTo("#scene1", { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power2.out" }, 0.2)
+        .to("#scene1", { opacity: 0, scale: 1.06, duration: 0.5, ease: "power2.in" }, 4.5);
+
+      // Scene 2: Digital Stigmergy & Mesh (5.0s - 9.8s)
+      tl.fromTo("#scene2", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" }, 5.0)
+        .to("#scene2", { opacity: 0, y: -30, duration: 0.5, ease: "power2.in" }, 9.5);
+
+      // Scene 3: NVIDIA NOOA Debate (10.0s - 14.8s)
+      tl.fromTo("#scene3", { opacity: 0, scale: 0.88 }, { opacity: 1, scale: 1, duration: 0.8, ease: "back.out(1.3)" }, 10.0)
+        .to("#scene3", { opacity: 0, scale: 1.05, duration: 0.5, ease: "power2.in" }, 14.5);
+
+      // Scene 4: Title & Outro (15.0s - 20.0s)
+      tl.fromTo("#scene4", { opacity: 0, scale: 0.92, y: 30 }, { opacity: 1, scale: 1, y: 0, duration: 1.0, ease: "power3.out" }, 15.0);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+      renderSwarm(0);
+    </script>
+  </body>
+</html>

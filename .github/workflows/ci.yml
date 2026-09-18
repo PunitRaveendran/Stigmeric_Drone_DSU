@@ -1,0 +1,63 @@
+name: PROTOPLASM CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, "feature/**" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  python-ml-suite:
+    name: Python ML & NOOA Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Automated Unit Tests (Sensor Fusion & NOOA Agent)
+        run: |
+          python -m unittest src/test_suite.py
+
+  swarm-simulation:
+    name: Swarm Physics & Monte Carlo Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run 100-Trial Swarm Monte Carlo Simulation
+        run: |
+          node monte_carlo.js
+
+  hyperframes-validation:
+    name: Hyperframes Composition Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate Launch Video Composition
+        working-directory: ./brag-output/composition
+        run: |
+          npx hyperframes check

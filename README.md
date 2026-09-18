@@ -1,5 +1,10 @@
 # 🧫 Protoplasm — Stigmergic SAR Swarm
 
+[![PROTOPLASM CI/CD](https://github.com/PunitRaveendran/Stigmeric_Drone_DSU/actions/workflows/ci.yml/badge.svg)](https://github.com/PunitRaveendran/Stigmeric_Drone_DSU/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
+[![NVIDIA NOOA](https://img.shields.io/badge/NVIDIA-NOOA%20Nemotron-76B900.svg)](https://build.nvidia.com)
+
 ![Protoplasm Dashboard](satellite_bg.png) 
 *(Note: Example dashboard screenshot. The system features a fully interactive real-time simulation UI).*
 
