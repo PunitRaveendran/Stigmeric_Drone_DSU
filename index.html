@@ -83,6 +83,8 @@
       <button class="btn btn-icon"        id="btn-toggle-overlay"   title="Toggle zone overlay (O)">🏗 Overlay</button>
       <button class="btn btn-icon active" id="btn-toggle-comm"      title="Toggle Agent Communication Speech Boxes (C)">💬 Agent Speech</button>
       <button class="btn btn-icon" id="btn-force-rtl" title="Manually Trigger Return-To-Launch Base (RTL)">🏠 Force RTL</button>
+      <button class="btn btn-icon" id="btn-inject-rogue" style="border-color:#ff0055;color:#ff4d6d" title="Simulate Byzantine Compromise / Attack Drill">🔴 Inject Rogue</button>
+      <button class="btn btn-icon active" id="btn-toggle-bft" style="border-color:#7b2cbf;color:#c77dff" title="Toggle Byzantine Fault Defense (BFT)">🛡️ BFT Defense</button>
       <a href="https://beeceptor.com/console/stigmericdrone" target="_blank" class="btn btn-icon" id="btn-beeceptor-badge" title="Open Live Beeceptor Cloud Traffic Console (stigmericdrone.proxy.beeceptor.com)" style="color: #ffaa00; border-color: rgba(255, 170, 0, 0.4); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
         <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#ffaa00; box-shadow:0 0 6px #ffaa00;"></span>
         🐝 Beeceptor HIL
@@ -100,7 +102,63 @@
   <!-- ═══ LEFT PANEL (floating card) ══════════════════════════════════════ -->
   <aside id="left-panel">
 
-    <!-- ① Rescue Certainty ──────────────────────────────────────────────── -->
+    <!-- ① Casualty Ground Truth & Extraction Status ─────────────────────── -->
+    <section class="panel-section casualty-summary-section">
+      <div class="score-header">
+        <h2 class="panel-title" style="margin:0">Casualty Detection</h2>
+        <div class="score-pill" id="casualty-score-pill">0 / 0 FOUND</div>
+      </div>
+      <div class="casualty-metrics-grid">
+        <div class="casualty-metric-card">
+          <span class="c-metric-label">PEOPLE FOUND</span>
+          <strong class="c-metric-val" id="people-found-val" style="color:#3ddc68">0</strong>
+        </div>
+        <div class="casualty-metric-card">
+          <span class="c-metric-label">GROUND TRUTH</span>
+          <strong class="c-metric-val" id="ground-truth-val" style="color:#4cc9f0">0</strong>
+        </div>
+      </div>
+      <div class="certainty-bar-track" style="height:5px;margin-top:8px;">
+        <div class="certainty-bar-fill" id="casualty-progress-bar" style="width:0%;background:#3ddc68"></div>
+      </div>
+      <div class="casualty-subrow">
+        <span>EXTRACTED: <strong id="extraction-pct-val" style="color:#3ddc68">0%</strong></span>
+        <span>MAP REVEALED: <strong id="left-map-revealed" style="color:#4cc9f0">0%</strong></span>
+      </div>
+    </section>
+
+    <!-- ② Mission Timing & Fleet Travel Box ──────────────────────────────── -->
+    <section class="panel-section mission-telemetry-section">
+      <h2 class="panel-title">Mission & Fleet Telemetry</h2>
+      <div class="telemetry-box-grid">
+        <div class="telemetry-cell">
+          <span class="t-cell-label">TICK</span>
+          <strong class="t-cell-val" id="box-tick-val">000000</strong>
+        </div>
+        <div class="telemetry-cell">
+          <span class="t-cell-label">REAL TIME</span>
+          <strong class="t-cell-val" id="box-real-time">00:00</strong>
+        </div>
+        <div class="telemetry-cell">
+          <span class="t-cell-label">SIM. TIME</span>
+          <strong class="t-cell-val" id="box-sim-time">00:00</strong>
+        </div>
+        <div class="telemetry-cell">
+          <span class="t-cell-label">AVG TIME / TGT</span>
+          <strong class="t-cell-val" id="box-avg-time">--</strong>
+        </div>
+        <div class="telemetry-cell">
+          <span class="t-cell-label">DISTANCE TRAVEL</span>
+          <strong class="t-cell-val" id="box-dist-val">0.0 m</strong>
+        </div>
+        <div class="telemetry-cell">
+          <span class="t-cell-label">AVG SPEED</span>
+          <strong class="t-cell-val" id="box-speed-val">0.0 m/s</strong>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③ Rescue Certainty ──────────────────────────────────────────────── -->
     <section class="panel-section">
       <h2 class="panel-title">Rescue Certainty</h2>
       <div class="certainty-wrap">
@@ -121,118 +179,125 @@
       </div>
     </section>
 
-    <!-- ② Live Agent Debate ─────────────────────────────────────────────── -->
+    <!-- ④ Live Agent Debate & Numerical Trackers ────────────────────────── -->
     <section class="panel-section debate-section">
-      <h2 class="panel-title">🎙️ Live Agent Debate</h2>
+      <div class="score-header">
+        <h2 class="panel-title" style="margin:0">Live Agent Debate</h2>
+        <div class="score-pill" id="debate-total-pill">0 PROPOSALS</div>
+      </div>
+      <div class="debate-stats-grid">
+        <div class="debate-stat-cell">
+          <span class="d-stat-label">PROPOSALS</span>
+          <strong class="d-stat-val" id="stat-debate-proposals" style="color:#4cc9f0">0</strong>
+        </div>
+        <div class="debate-stat-cell">
+          <span class="d-stat-label">AGREES</span>
+          <strong class="d-stat-val" id="stat-debate-agrees" style="color:#3ddc68">0</strong>
+        </div>
+        <div class="debate-stat-cell">
+          <span class="d-stat-label">REJECTS</span>
+          <strong class="d-stat-val" id="stat-debate-rejects" style="color:#ff4d6d">0</strong>
+        </div>
+        <div class="debate-stat-cell">
+          <span class="d-stat-label">CONSENSUS</span>
+          <strong class="d-stat-val" id="stat-debate-consensus" style="color:#ffd60a">0</strong>
+        </div>
+      </div>
       <div class="debate-feed" id="debate-feed">
-        <div class="debate-empty">Waiting for agent communications…</div>
+        <div class="debate-empty">Waiting for agent communications...</div>
       </div>
     </section>
 
-    <!-- ③ Multi-Modal Consensus ─────────────────────────────────────────── -->
+    <!-- ⑤ Multi-Modal Consensus, Relay Mesh & NOAA Intelligence ──────────── -->
     <section class="panel-section">
-      <h2 class="panel-title">Multi-Modal Consensus</h2>
+      <h2 class="panel-title">Multi-Modal Consensus & Relay Network</h2>
       <div class="multimodal-status-grid">
         <div class="multimodal-item" id="mm-thermal">
-          <span class="mm-icon">🌡️</span>
           <span class="mm-label">Thermal</span>
           <span class="mm-val" id="mm-val-thermal">LOW</span>
         </div>
         <div class="multimodal-item" id="mm-audio">
-          <span class="mm-icon">🎙️</span>
           <span class="mm-label">Audio</span>
           <span class="mm-val" id="mm-val-audio">LOW</span>
         </div>
         <div class="multimodal-item" id="mm-camera">
-          <span class="mm-icon">📷</span>
           <span class="mm-label">YOLO</span>
           <span class="mm-val" id="mm-val-camera">LOW</span>
         </div>
         <div class="multimodal-item" id="mm-gas">
-          <span class="mm-icon">💨</span>
           <span class="mm-label">Gas</span>
           <span class="mm-val" id="mm-val-gas">LOW</span>
         </div>
       </div>
-      <div class="unique-corroboration-row">
+      <div class="unique-corroboration-row" style="margin-top:8px">
         <span class="unique-label">Unique Drone Consensus:</span>
         <strong class="unique-val" id="unique-drone-count">0 Drones</strong>
       </div>
-    </section>
 
-    <!-- ④ Drone Fleet Status ────────────────────────────────────────────── -->
-    <section class="panel-section">
-      <h2 class="panel-title">Drone Fleet Status</h2>
-      <div class="fleet-stats-row">
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">ACTIVE</span>
-          <span class="fleet-stat-val" id="fleet-active">0</span>
+      <!-- Relay Network Telemetry & NOAA Access -->
+      <div class="relay-stats-block" style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div class="score-header" style="margin-bottom:6px">
+          <span class="control-label" style="font-weight:700">Relay Mesh & NOAA Status</span>
+          <span class="roster-badge" id="relay-status-badge" style="color:#00f0ff">ACTIVE</span>
         </div>
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">RELAYS</span>
-          <span class="fleet-stat-val" id="fleet-relays" style="color:#00f0ff">0</span>
+        <div class="relay-stats-grid">
+          <div class="relay-cell">
+            <span class="r-cell-label">ACTIVE RELAYS</span>
+            <strong class="r-cell-val" id="relay-active-val" style="color:#00f0ff">0</strong>
+          </div>
+          <div class="relay-cell">
+            <span class="r-cell-label">PACKETS RELAYED</span>
+            <strong class="r-cell-val" id="relay-packets-val" style="color:#3ddc68">0</strong>
+          </div>
+          <div class="relay-cell">
+            <span class="r-cell-label">NOOA ACCESSES</span>
+            <strong class="r-cell-val" id="nooa-access-val" style="color:#ffd60a">0</strong>
+          </div>
+          <div class="relay-cell">
+            <span class="r-cell-label">NOOA DECISION</span>
+            <strong class="r-cell-val" id="nooa-decision-val" style="color:#4cc9f0">IDLE</strong>
+          </div>
         </div>
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">SENTINELS</span>
-          <span class="fleet-stat-val" id="fleet-sentinels" style="color:var(--clr-solidify)">0</span>
+        <div class="comms-health-row" style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:0.62rem;font-family:'Space Mono',monospace;color:rgba(180,200,240,0.6)">
+          <span>COMMS LINK:</span>
+          <div class="certainty-bar-track" style="flex:1;height:4px;background:rgba(255,255,255,0.06)">
+            <div class="certainty-bar-fill" id="comms-health-bar" style="width:100%;background:#3ddc68;transition:width 0.3s ease,background 0.3s ease"></div>
+          </div>
+          <span id="comms-health-label" style="min-width:32px;text-align:right;color:#3ddc68">100%</span>
         </div>
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">⚡ LOW BAT</span>
-          <span class="fleet-stat-val" id="fleet-lowbat" style="color:#ea4335">0</span>
-        </div>
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">📵 DEGRADED</span>
-          <span class="fleet-stat-val" id="fleet-degraded" style="color:#ff9500">0</span>
-        </div>
-      </div>
-      <div class="comms-health-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:0.62rem;font-family:'Space Mono',monospace;color:rgba(180,200,240,0.6)">
-        <span>📶 COMMS:</span>
-        <div class="certainty-bar-track" style="flex:1;height:4px;background:rgba(255,255,255,0.06)">
-          <div class="certainty-bar-fill" id="comms-health-bar" style="width:100%;background:#3ddc68;transition:width 0.3s ease,background 0.3s ease"></div>
-        </div>
-        <span id="comms-health-label" style="min-width:32px;text-align:right;color:#3ddc68">100%</span>
-      </div>
-      <div class="fleet-telemetry-row">
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">⏱️ REAL TIME</span>
-          <span class="fleet-stat-val" id="fleet-real-time">00:00</span>
-        </div>
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">⚡ AVG SPEED</span>
-          <span class="fleet-stat-val" id="fleet-avg-speed">0.0 m/s</span>
-        </div>
-        <div class="fleet-stat">
-          <span class="fleet-stat-label">📍 TOTAL DIST</span>
-          <span class="fleet-stat-val" id="fleet-total-dist">0.0 km</span>
-        </div>
-      </div>
-      <div id="battery-alert-bar" class="battery-alert" style="display:none">
-        ⚠️ <span id="battery-alert-text">Drone ALPHA-0 battery critical (15%)</span>
-      </div>
-      <div id="comms-alert-bar" class="battery-alert" style="display:none;border-left-color:#ff9500">
-        📵 <span id="comms-alert-text">Comms degraded</span>
       </div>
     </section>
 
-    <!-- ⑤ Individual Drone Telemetry Roster ────────────────────────────── -->
-    <section class="panel-section drone-roster-section">
-      <div class="roster-header">
-        <h2 class="panel-title" style="margin-bottom:0">Individual Drone Telemetry</h2>
-        <span class="roster-badge" id="roster-count-badge">0 Drones</span>
+    <!-- ⑥ Swarm Cyber Defense & Byzantine Fault Tolerance ───────────────── -->
+    <section class="panel-section security-section" id="security-panel">
+      <div class="score-header">
+        <h2 class="panel-title" style="margin:0">Swarm Cyber Defense</h2>
+        <div class="score-pill" id="bft-status-badge" style="background:rgba(0,255,170,0.15);color:#00ffaa;border:1px solid #00ffaa;font-size:9.5px;padding:2px 8px">SECURE</div>
       </div>
-      <div class="drone-roster-controls" style="margin-top:8px;">
-        <input type="text" id="drone-search" placeholder="Filter callsign…" class="drone-filter-input" />
-        <select id="drone-filter-role" class="drone-filter-select">
-          <option value="ALL">All Roles</option>
-          <option value="SCOUT">Scouts</option>
-          <option value="RELAY">Relays</option>
-          <option value="SENTINEL">Sentinels</option>
-          <option value="STIGMERGIC">Degraded Comms</option>
-          <option value="LOWBAT">Low Battery</option>
-        </select>
+      <div class="fleet-stats-grid" style="margin-top:8px">
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">ROGUE DRONES</span>
+          <span class="fleet-stat-val" id="stat-rogue-count" style="color:#ff0055">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">ATTACKS BLOCKED</span>
+          <span class="fleet-stat-val" id="stat-attacks-blocked" style="color:#3ddc68">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">QUARANTINED</span>
+          <span class="fleet-stat-val" id="stat-quarantined-count" style="color:#9d4edd">0</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">BFT QUORUM</span>
+          <span class="fleet-stat-val" id="stat-bft-quorum" style="color:#4cc9f0">>2/3 (SAFE)</span>
+        </div>
       </div>
-      <div class="drone-cards-list" id="drone-cards-list">
-        <!-- Rendered dynamically by JS -->
+      <div class="security-btn-row" style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-sm" id="btn-side-inject-rogue" style="flex:1;background:rgba(255,0,85,0.15);border:1px solid #ff0055;color:#ff4d6d;font-size:10.5px;padding:5px 6px">Inject Rogue</button>
+        <button class="btn btn-sm" id="btn-side-neutralize" style="flex:1;background:rgba(0,255,170,0.15);border:1px solid #00ffaa;color:#00ffaa;font-size:10.5px;padding:5px 6px">Neutralize</button>
+      </div>
+      <div id="security-alert-bar" class="battery-alert" style="display:none;border-left-color:#ff0055;background:rgba(255,0,85,0.12)">
+        <span id="security-alert-text">Rogue agent isolated from mesh</span>
       </div>
     </section>
 
@@ -241,33 +306,18 @@
   <!-- ═══ RIGHT PANEL ══════════════════════════════════════════════════════ -->
   <aside id="side-panel">
 
-    <!-- ⓪ DISASTER MISSION SCOREBOARD ──────────────────────────────────── -->
+    <!-- ⓪ DISASTER MISSION SCOREBOARD & PHASE STEPPER ─────────────────── -->
     <section class="panel-section scoreboard-section">
       <div class="score-header">
         <h2 class="panel-title" style="margin:0">Disaster Mission Control</h2>
         <div class="score-pill" id="score-pill">0 PTS</div>
       </div>
-      <div class="rescue-progress-row">
-        <span class="progress-label">SURVIVORS SECURED:</span>
-        <strong class="progress-val" id="survivor-score-text">0 / 3 (0%)</strong>
+      <div class="phase-compact-row" style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+        <div class="phase-step-badge" id="phase-badge" style="margin:0">PHASE 1 / 4</div>
+        <div class="phase-name" id="phase-name" style="font-size:12px;margin:0">SPREADING</div>
       </div>
-      <div class="certainty-bar-track" style="height:6px;margin-top:4px">
-        <div class="certainty-bar-fill" id="survivor-progress-bar" style="width:0%;background:#3ddc68"></div>
-      </div>
-      <div class="rescue-progress-row" style="margin-top:8px">
-        <span class="progress-label">MAP REVEALED:</span>
-        <strong class="progress-val" id="map-explored-text" style="color:#4cc9f0">0%</strong>
-      </div>
-    </section>
-
-    <!-- ① Current Phase (Moved above survivor status and below map revealed) -->
-    <section class="panel-section phase-section" id="phase-section">
-      <div class="phase-step-badge" id="phase-badge">PHASE 1 / 4</div>
-      <div class="phase-name" id="phase-name">SPREADING</div>
-      <div class="phase-desc" id="phase-desc">Drones sweeping the disaster zone, depositing chemical trails as they explore.</div>
-
       <!-- Phase stepper -->
-      <div class="phase-stepper">
+      <div class="phase-stepper" style="margin-top:8px;margin-bottom:2px">
         <div class="phase-step active" id="step-spread">
           <div class="phase-step-dot"></div>
           <div class="phase-step-label">SPREAD</div>
@@ -290,11 +340,42 @@
       </div>
     </section>
 
-    <!-- ② Individual Survivor Status ────────────────────────────────────── -->
-    <section class="panel-section">
-      <h2 class="panel-title">Individual Survivor Status</h2>
-      <div class="target-cards-list" id="target-cards-list">
-        <!-- Rendered dynamically by JS -->
+    <!-- ① SURVIVORS & FLEET TELEMETRY SIDE-BY-SIDE WITH DROPDOWNS ───────── -->
+    <section class="panel-section dual-intel-section">
+      <div class="dual-intel-grid">
+
+        <!-- Column A: Survivors Dropdown & Dossier -->
+        <div class="intel-column survivor-column">
+          <div class="intel-header">
+            <h3 class="intel-title">Survivors</h3>
+            <span class="intel-badge" id="survivor-score-text">0 / 0</span>
+          </div>
+          <div class="intel-select-wrap">
+            <select id="survivor-dropdown" class="intel-dropdown">
+              <option value="ALL">All Targets</option>
+            </select>
+          </div>
+          <div class="target-cards-list" id="target-cards-list">
+            <!-- Rendered dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- Column B: Fleet Drones Dropdown & Telemetry Side-By-Side -->
+        <div class="intel-column drone-column">
+          <div class="intel-header">
+            <h3 class="intel-title">Fleet Drones</h3>
+            <span class="intel-badge" id="roster-count-badge">0 Drones</span>
+          </div>
+          <div class="intel-select-wrap">
+            <select id="drone-dropdown" class="intel-dropdown">
+              <option value="ALL">All Drones</option>
+            </select>
+          </div>
+          <div class="drone-cards-list" id="drone-cards-list">
+            <!-- Rendered dynamically by JS -->
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -331,7 +412,7 @@
     <section class="panel-section" style="flex:1">
       <h2 class="panel-title">Live Event Feed</h2>
       <ul id="event-log" aria-live="polite">
-        <li class="event-empty">Simulation starting…</li>
+        <li class="event-empty">Simulation starting...</li>
       </ul>
     </section>
 
@@ -534,8 +615,10 @@ function resetSim() {
   _missionRealElapsedMs = 0;
   if (visualizer) visualizer.selectedDroneId = null;
   document.getElementById('debate-feed').innerHTML = '<div class="debate-empty">Waiting for agent communications…</div>';
-  document.getElementById('fp-count').textContent = '0';
-  document.getElementById('battery-alert-bar').style.display = 'none';
+  const fpEl = document.getElementById('fp-count');
+  if (fpEl) fpEl.textContent = '0';
+  const battBar = document.getElementById('battery-alert-bar');
+  if (battBar) battBar.style.display = 'none';
   startLoop();
 }
 
@@ -549,21 +632,21 @@ function updateDebateFeed(drones, tick) {
           newMessages.push({
             type: 'proposal',
             callsign: msg.callsign,
-            text: `📢 Reading ${(msg.confidence * 100).toFixed(0)}% signal at (${msg.col},${msg.row}). Requesting verification.`,
+            text: `[PROPOSAL] Reading ${(msg.confidence * 100).toFixed(0)}% signal at (${msg.col},${msg.row}). Requesting verification.`,
             tick,
           });
         } else if (msg.type === 'SECTOR_EXPLORED' && Math.random() < 0.08) {
           newMessages.push({
             type: 'sector',
             callsign: msg.callsign,
-            text: `🗺️ Sector (${msg.col},${msg.row}) mapped. Moving to next quadrant.`,
+            text: `[MAPPED] Sector (${msg.col},${msg.row}) mapped. Moving to next quadrant.`,
             tick,
           });
         } else if (msg.type === 'CONSENSUS_CONFIRMED') {
           newMessages.push({
             type: 'consensus',
             callsign: msg.callsign,
-            text: `🎯 CONSENSUS LOCKED at (${msg.col},${msg.row})! Dispatching rescue team.`,
+            text: `[CONSENSUS] Target locked at (${msg.col},${msg.row})! Dispatching rescue team.`,
             tick,
           });
         }
@@ -576,14 +659,14 @@ function updateDebateFeed(drones, tick) {
         newMessages.push({
           type: 'agree',
           callsign: drone.callsign,
-          text: `✅ I AGREE — confirmed tri-modal signal from my vantage point.`,
+          text: `[AGREE] Confirmed tri-modal signal from vantage point.`,
           tick,
         });
       } else if (speech.vote === 'REJECT') {
         newMessages.push({
           type: 'reject',
           callsign: drone.callsign,
-          text: `❌ I REJECT — single-channel only, likely false positive.`,
+          text: `[REJECT] Single-channel only, likely false positive.`,
           tick,
         });
       }
@@ -622,11 +705,20 @@ function updateUI() {
   const certainty = Math.round((clusterCertainty !== undefined ? clusterCertainty : avgViscosity) * 100);
 
   // Tick + Mission Timer (Sim Time & Real Time)
-  document.getElementById('tick-value').textContent = tick.toString().padStart(6, '0');
+  const tickStr = tick.toString().padStart(6, '0');
+  const tickOverlayEl = document.getElementById('tick-value');
+  if (tickOverlayEl) tickOverlayEl.textContent = tickStr;
+  const boxTickEl = document.getElementById('box-tick-val');
+  if (boxTickEl) boxTickEl.textContent = tickStr;
+
   const totalSec = Math.floor(tick * 0.062); // ~62ms per tick
   const mm = Math.floor(totalSec / 60).toString().padStart(2, '0');
   const ss = (totalSec % 60).toString().padStart(2, '0');
-  document.getElementById('mission-timer').textContent = `${mm}:${ss}`;
+  const simTimeStr = `${mm}:${ss}`;
+  const simTimerEl = document.getElementById('mission-timer');
+  if (simTimerEl) simTimerEl.textContent = simTimeStr;
+  const boxSimEl = document.getElementById('box-sim-time');
+  if (boxSimEl) boxSimEl.textContent = simTimeStr;
 
   // Real-Time Wall Clock Elapsed
   const realSec = Math.floor(_missionRealElapsedMs / 1000);
@@ -635,8 +727,8 @@ function updateUI() {
   const realTimeStr = `${rMm}:${rSs}`;
   const rtEl = document.getElementById('real-time-val');
   if (rtEl) rtEl.textContent = realTimeStr;
-  const fleetRtEl = document.getElementById('fleet-real-time');
-  if (fleetRtEl) fleetRtEl.textContent = realTimeStr;
+  const boxRtEl = document.getElementById('box-real-time');
+  if (boxRtEl) boxRtEl.textContent = realTimeStr;
 
   // Fleet Average Speed & Total Distance
   const avgSpeed = stats.fleetAvgSpeed || 0;
@@ -649,147 +741,83 @@ function updateUI() {
   const hudDist = document.getElementById('hud-dist-val');
   if (hudDist) hudDist.textContent = distStr;
 
-  const fleetSpd = document.getElementById('fleet-avg-speed');
-  if (fleetSpd) fleetSpd.textContent = spdStr;
-  const fleetDist = document.getElementById('fleet-total-dist');
-  if (fleetDist) fleetDist.textContent = distStr;
+  const boxSpdEl = document.getElementById('box-speed-val');
+  if (boxSpdEl) boxSpdEl.textContent = spdStr;
+  const boxDistEl = document.getElementById('box-dist-val');
+  if (boxDistEl) boxDistEl.textContent = distStr;
 
-  // Scoreboard & Survivor Targets Tracker
-  const totalTargets = survivorTargets ? survivorTargets.length : 3;
-  const pctSecured = Math.round((survivorsExtracted / (totalTargets || 1)) * 100);
-  document.getElementById('score-pill').textContent = `${missionScore || 0} PTS`;
-  document.getElementById('survivor-score-text').textContent = `${survivorsExtracted} / ${totalTargets} (${pctSecured}%)`;
-  document.getElementById('survivor-progress-bar').style.width = `${pctSecured}%`;
+  // Casualty Ground Truth & Extraction Metrics
+  const totalTargets = survivorTargets ? survivorTargets.length : (scenario?.survivors?.length || 5);
+  const foundTargets = survivorTargets ? survivorTargets.filter(t => t.status === 'EXTRACTED' || t.status === 'RESCUE_DISPATCH' || t.status === 'CONVERGING' || (t.confidence >= 0.35)).length : 0;
+  const extractedCount = survivorsExtracted || 0;
+  const pctExtracted = Math.round((extractedCount / (totalTargets || 1)) * 100);
 
-  // Map Revealed Metric
-  const mapExploredEl = document.getElementById('map-explored-text');
-  if (mapExploredEl) {
-    const mapPct = stats.mapExploredPct || 0;
-    mapExploredEl.textContent = `${mapPct}%`;
+  const casualtyPill = document.getElementById('casualty-score-pill');
+  if (casualtyPill) casualtyPill.textContent = `${foundTargets} / ${totalTargets} FOUND`;
+  const peopleFoundEl = document.getElementById('people-found-val');
+  if (peopleFoundEl) peopleFoundEl.textContent = foundTargets;
+  const groundTruthEl = document.getElementById('ground-truth-val');
+  if (groundTruthEl) groundTruthEl.textContent = totalTargets;
+  const casualtyBar = document.getElementById('casualty-progress-bar');
+  if (casualtyBar) casualtyBar.style.width = `${pctExtracted}%`;
+  const extractionPctEl = document.getElementById('extraction-pct-val');
+  if (extractionPctEl) extractionPctEl.textContent = `${pctExtracted}%`;
+
+  const leftMapEl = document.getElementById('left-map-revealed');
+  if (leftMapEl) leftMapEl.textContent = `${stats.mapExploredPct || 0}%`;
+
+  // Average time per casualty
+  const boxAvgEl = document.getElementById('box-avg-time');
+  if (boxAvgEl) {
+    if (extractedCount > 0) {
+      const avgSec = Math.round(totalSec / extractedCount);
+      const aMm = Math.floor(avgSec / 60).toString().padStart(2, '0');
+      const aSs = (avgSec % 60).toString().padStart(2, '0');
+      boxAvgEl.textContent = `${aMm}:${aSs} / tgt`;
+    } else {
+      boxAvgEl.textContent = '--';
+    }
   }
 
-  // Render Target Cards with individual scores and attention focus badges
-  const cardsContainer = document.getElementById('target-cards-list');
-  if (cardsContainer && survivorTargets) {
-    cardsContainer.innerHTML = survivorTargets.map(t => {
-      const isDone = t.status === 'EXTRACTED';
-      const isDispatch = t.status === 'RESCUE_DISPATCH';
-      const isConv = t.status === 'CONVERGING';
-      const isFocus = t.isPrimaryTarget;
+  // Live Agent Debate Tracking Numbers
+  const dStats = swarm.debateStats || { proposals: 0, agrees: 0, rejects: 0, consensusConfirmed: 0 };
+  const dPropEl = document.getElementById('stat-debate-proposals');
+  if (dPropEl) dPropEl.textContent = dStats.proposals;
+  const dAgrEl = document.getElementById('stat-debate-agrees');
+  if (dAgrEl) dAgrEl.textContent = dStats.agrees;
+  const dRejEl = document.getElementById('stat-debate-rejects');
+  if (dRejEl) dRejEl.textContent = dStats.rejects;
+  const dConsEl = document.getElementById('stat-debate-consensus');
+  if (dConsEl) dConsEl.textContent = dStats.consensusConfirmed;
+  const dPill = document.getElementById('debate-total-pill');
+  if (dPill) dPill.textContent = `${dStats.proposals} PROPOSALS`;
 
-      const statusBadge = isDone ? '<span class="t-badge done">✅ EXTRACTED</span>'
-                        : isDispatch ? '<span class="t-badge dispatch">🔴 DISPATCH</span>'
-                        : isConv ? '<span class="t-badge conv">🟡 CONVERGING</span>'
-                        : '<span class="t-badge search">🔵 SEARCHING</span>';
-
-      const focusBadge = isFocus ? '<span class="t-badge focus">⚡ ACTIVE FOCUS</span>' : '';
-      const confPct = Math.round((t.confidence || 0) * 100);
-      const barColor = isDone ? '#3ddc68' : isDispatch ? '#ff4d6d' : isConv ? '#ffd60a' : '#4cc9f0';
-
-      return `
-        <div class="target-card ${isDone ? 'done' : isDispatch ? 'dispatch' : ''} ${isFocus ? 'is-focus' : ''}">
-          <div class="t-card-top">
-            <span class="t-name">${t.name} ${focusBadge}</span>
-            ${statusBadge}
-          </div>
-          <div class="t-card-sub">${t.sector || 'SECTOR GRID'} · (${t.col}, ${t.row})</div>
-          <div class="t-card-score-row" style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;font-size:0.60rem">
-            <span style="color:var(--clr-text-faint);font-family:'Space Mono',monospace;letter-spacing:0.04em">CONFIDENCE:</span>
-            <strong style="color:${barColor};font-family:'Space Mono',monospace;font-size:0.65rem">${confPct}%</strong>
-          </div>
-          <div class="certainty-bar-track" style="height:2.5px;margin-top:2px;background:rgba(255,255,255,0.05)">
-            <div class="certainty-bar-fill" style="width:${confPct}%;background:${barColor}"></div>
-          </div>
-        </div>
-      `;
-    }).join('');
+  // Relay Mesh Network & NOAA Access Telemetry
+  const rStats = swarm.relayStats || { activeRelays: 0, packetsRelayed: 0 };
+  const rActiveEl = document.getElementById('relay-active-val');
+  if (rActiveEl) rActiveEl.textContent = `${rStats.activeRelays} Nodes`;
+  const rPacketsEl = document.getElementById('relay-packets-val');
+  if (rPacketsEl) rPacketsEl.textContent = rStats.packetsRelayed;
+  const rBadge = document.getElementById('relay-status-badge');
+  if (rBadge) {
+    rBadge.textContent = rStats.activeRelays > 0 ? 'RELAYING' : 'STANDBY';
+    rBadge.style.color = rStats.activeRelays > 0 ? '#00f0ff' : 'var(--clr-text-faint)';
   }
 
-  // Regime badge (canvas badge)
-  const badge = document.getElementById('regime-badge');
-  badge.className = dominantRegime;
-  document.getElementById('regime-text').textContent = dominantRegime;
-
-  // ── Phase section ───────────────────────────────────────────────────────
-  const cfg = PHASE_CONFIG[dominantRegime] ?? PHASE_CONFIG.SPREAD;
-  document.getElementById('phase-badge').textContent = cfg.badge;
-  document.getElementById('phase-name').textContent  = cfg.name;
-  document.getElementById('phase-desc').textContent  = cfg.desc;
-  document.getElementById('certainty-explainer').textContent = cfg.explainer;
-
-  // Phase section background color
-  const phaseSection = document.getElementById('phase-section');
-  phaseSection.dataset.regime = dominantRegime;
-
-  // Phase stepper — mark completed steps
-  const steps = ['spread', 'converge', 'solidify', 'rescued'];
-  const regimeOrder = { SPREAD: 0, CONVERGE: 1, SOLIDIFY: 2, RESCUED: 3 };
-  const currentIdx  = regimeOrder[dominantRegime] ?? 0;
-  steps.forEach((s, i) => {
-    const el = document.getElementById(`step-${s}`);
-    if (el) el.className = 'phase-step' + (i < currentIdx ? ' done' : i === currentIdx ? ' active' : '');
-  });
-  document.getElementById('line-1').className = 'phase-step-line' + (currentIdx >= 1 ? ' done' : '');
-  document.getElementById('line-2').className = 'phase-step-line' + (currentIdx >= 2 ? ' done' : '');
-  document.getElementById('line-3').className = 'phase-step-line' + (currentIdx >= 3 ? ' done' : '');
-
-  // ── Rescue Certainty ────────────────────────────────────────────────────
-  _displayedCertainty += (certainty - _displayedCertainty) * 0.08;
-  const dispC = Math.round(_displayedCertainty);
-  document.getElementById('certainty-pct').textContent = `${dispC}%`;
-  const certBar = document.getElementById('certainty-bar');
-  certBar.style.width = `${dispC}%`;
-  const certColor = dispC >= 68 ? 'var(--clr-solidify)'
-                  : dispC >= 30 ? 'var(--clr-converge)'
-                  : 'var(--clr-spread)';
-  certBar.style.background = certColor;
-  document.getElementById('certainty-pct').style.color = certColor;
-
-  // ── Multi-Modal Consensus ────────────────────────────────────────────────
-  if (stats.channels) {
-    const { thermal, audio, camera, gas } = stats.channels;
-    document.getElementById('mm-val-thermal').textContent = thermal;
-    document.getElementById('mm-val-audio').textContent   = audio;
-    const camEl = document.getElementById('mm-val-camera');
-    if (camEl) camEl.textContent = camera || 'LOW';
-    document.getElementById('mm-val-gas').textContent     = gas;
-    document.getElementById('mm-thermal').classList.toggle('active', thermal.startsWith('ACTIVE'));
-    document.getElementById('mm-audio').classList.toggle('active', audio.startsWith('ACTIVE'));
-    const camBox = document.getElementById('mm-camera');
-    if (camBox) camBox.classList.toggle('active', camera && camera.startsWith('ACTIVE'));
-    document.getElementById('mm-gas').classList.toggle('active', gas.startsWith('ACTIVE'));
-  }
-  const maxUnique = stats.maxUniqueCorroboration || 0;
-  const uniqueEl = document.getElementById('unique-drone-count');
-  uniqueEl.textContent = `${maxUnique} Drone${maxUnique !== 1 ? 's' : ''}`;
-  uniqueEl.style.color = maxUnique >= 3 ? 'var(--clr-solidify)' : maxUnique >= 1 ? 'var(--clr-converge)' : 'var(--clr-text-faint)';
-
-  // ── Drone Fleet Status & Battery Alerts ──────────────────────────────────
-  const sentinelCount = stats.roleCounts ? stats.roleCounts.SENTINEL : (swarm.activeSentinels ? swarm.activeSentinels.size : 0);
-  const relayCount = stats.roleCounts ? stats.roleCounts.RELAY : drones.filter(d => d.role === 'RELAY').length;
-  const lowBatDrones = drones.filter(d => d.battery <= 20);
-  document.getElementById('fleet-active').textContent = drones.length;
-  const relaysEl = document.getElementById('fleet-relays');
-  if (relaysEl) relaysEl.textContent = relayCount;
-  document.getElementById('fleet-sentinels').textContent = sentinelCount;
-  document.getElementById('fleet-lowbat').textContent = lowBatDrones.length;
-
-  const alertBar = document.getElementById('battery-alert-bar');
-  if (lowBatDrones.length > 0) {
-    const worst = lowBatDrones.reduce((a, b) => a.battery < b.battery ? a : b);
-    alertBar.style.display = 'block';
-    document.getElementById('battery-alert-text').textContent =
-      `Drone ${worst.callsign} battery critical (${worst.battery}%) — RTL recommended`;
-  } else {
-    alertBar.style.display = 'none';
+  const nStats = swarm.nooaStats || { accessCount: 0, successCount: 0, lastDecision: 'IDLE' };
+  const nAccessEl = document.getElementById('nooa-access-val');
+  if (nAccessEl) nAccessEl.textContent = nStats.accessCount;
+  const nDecisionEl = document.getElementById('nooa-decision-val');
+  if (nDecisionEl) {
+    nDecisionEl.textContent = nStats.lastDecision || 'IDLE';
+    nDecisionEl.style.color = (nStats.lastDecision === 'CONFIRM') ? '#3ddc68'
+                            : (nStats.lastDecision === 'REJECT') ? '#ff4d6d'
+                            : '#4cc9f0';
   }
 
-  // ── Self-Healing Comms Health ─────────────────────────────────────────────
+  // Self-Healing Comms Health
   const commsStats = stats.commsStats;
   if (commsStats) {
-    const degradedEl = document.getElementById('fleet-degraded');
-    if (degradedEl) degradedEl.textContent = commsStats.degradedCount;
-
     const lqPct = Math.round((commsStats.avgLinkQuality || 0) * 100);
     const healthBar = document.getElementById('comms-health-bar');
     const healthLabel = document.getElementById('comms-health-label');
@@ -801,20 +829,150 @@ function updateUI() {
       healthLabel.textContent = `${lqPct}%`;
       healthLabel.style.color = lqPct >= 70 ? '#3ddc68' : lqPct >= 40 ? '#ffd60a' : '#ff4d6d';
     }
+  }
 
-    const commsAlertBar = document.getElementById('comms-alert-bar');
-    if (commsAlertBar) {
-      if (commsStats.degradedCount > 0) {
-        commsAlertBar.style.display = 'block';
-        document.getElementById('comms-alert-text').textContent =
-          `${commsStats.degradedCount} drone${commsStats.degradedCount > 1 ? 's' : ''} in STIGMERGIC mode (LQ: ${(commsStats.avgLinkQuality || 0).toFixed(2)}) — pheromone-only navigation`;
-      } else {
-        commsAlertBar.style.display = 'none';
-      }
+  // Cyber-Physical Security & Byzantine Telemetry
+  const secStats = swarm ? (swarm.securityStats || {}) : {};
+  const rogueCountEl = document.getElementById('stat-rogue-count');
+  if (rogueCountEl) rogueCountEl.textContent = secStats.rogueCount || 0;
+
+  const attacksBlockedEl = document.getElementById('stat-attacks-blocked');
+  if (attacksBlockedEl) attacksBlockedEl.textContent = secStats.attacksBlocked || 0;
+
+  const quarantinedEl = document.getElementById('stat-quarantined-count');
+  if (quarantinedEl) quarantinedEl.textContent = secStats.quarantinedCount || 0;
+
+  const bftBadge = document.getElementById('bft-status-badge');
+  const bftQuorum = document.getElementById('stat-bft-quorum');
+  const secAlertBar = document.getElementById('security-alert-bar');
+  const secAlertText = document.getElementById('security-alert-text');
+
+  const isBFTActive = swarm ? swarm.byzantineDefenseEnabled : true;
+  if (bftBadge) {
+    if (!isBFTActive) {
+      bftBadge.textContent = 'DEFENSE OFF';
+      bftBadge.style.color = '#ff9500';
+      bftBadge.style.borderColor = '#ff9500';
+      bftBadge.style.background = 'rgba(255,149,0,0.15)';
+    } else if (secStats.quarantinedCount > 0) {
+      bftBadge.textContent = 'ISOLATION ACTIVE';
+      bftBadge.style.color = '#9d4edd';
+      bftBadge.style.borderColor = '#9d4edd';
+      bftBadge.style.background = 'rgba(157,78,221,0.15)';
+    } else if (secStats.rogueCount > 0) {
+      bftBadge.textContent = 'BREACH DETECTED';
+      bftBadge.style.color = '#ff0055';
+      bftBadge.style.borderColor = '#ff0055';
+      bftBadge.style.background = 'rgba(255,0,85,0.15)';
+    } else {
+      bftBadge.textContent = 'SECURE';
+      bftBadge.style.color = '#00ffaa';
+      bftBadge.style.borderColor = '#00ffaa';
+      bftBadge.style.background = 'rgba(0,255,170,0.15)';
     }
   }
 
-  // ── False Positive Counter ───────────────────────────────────────────────
+  if (bftQuorum) {
+    const honestCount = (drones?.length || 0) - (secStats.rogueCount || 0);
+    const minHonestNeeded = Math.floor(((drones?.length || 0) * 2) / 3) + 1;
+    bftQuorum.textContent = honestCount >= minHonestNeeded ? '>2/3 (SAFE)' : '<2/3 (RISK)';
+    bftQuorum.style.color = honestCount >= minHonestNeeded ? '#4cc9f0' : '#ff0055';
+  }
+
+  if (secAlertBar && secAlertText) {
+    if (secStats.quarantinedCount > 0) {
+      secAlertBar.style.display = 'block';
+      secAlertText.textContent = `${secStats.quarantinedCount} rogue agent(s) isolated from mesh consensus`;
+    } else if (secStats.rogueCount > 0) {
+      secAlertBar.style.display = 'block';
+      secAlertText.textContent = `${secStats.rogueCount} rogue drone(s) active in disaster zone`;
+    } else {
+      secAlertBar.style.display = 'none';
+    }
+  }
+
+  // Scoreboard
+  const scorePillEl = document.getElementById('score-pill');
+  if (scorePillEl) scorePillEl.textContent = `${missionScore || 0} PTS`;
+
+  // Regime badge (canvas badge)
+  const badge = document.getElementById('regime-badge');
+  if (badge) {
+    badge.className = dominantRegime;
+    const rText = document.getElementById('regime-text');
+    if (rText) rText.textContent = dominantRegime;
+  }
+
+  // Phase section
+  const cfg = PHASE_CONFIG[dominantRegime] ?? PHASE_CONFIG.SPREAD;
+  const pBadge = document.getElementById('phase-badge');
+  if (pBadge) pBadge.textContent = cfg.badge;
+  const pName = document.getElementById('phase-name');
+  if (pName) pName.textContent = cfg.name;
+  const pDesc = document.getElementById('phase-desc');
+  if (pDesc) pDesc.textContent = cfg.desc;
+  const cExplainer = document.getElementById('certainty-explainer');
+  if (cExplainer) cExplainer.textContent = cfg.explainer;
+
+  // Phase stepper — mark completed steps
+  const steps = ['spread', 'converge', 'solidify', 'rescued'];
+  const regimeOrder = { SPREAD: 0, CONVERGE: 1, SOLIDIFY: 2, RESCUED: 3 };
+  const currentIdx = regimeOrder[dominantRegime] ?? 0;
+  steps.forEach((s, i) => {
+    const el = document.getElementById(`step-${s}`);
+    if (el) el.className = 'phase-step' + (i < currentIdx ? ' done' : i === currentIdx ? ' active' : '');
+  });
+  const l1 = document.getElementById('line-1');
+  if (l1) l1.className = 'phase-step-line' + (currentIdx >= 1 ? ' done' : '');
+  const l2 = document.getElementById('line-2');
+  if (l2) l2.className = 'phase-step-line' + (currentIdx >= 2 ? ' done' : '');
+  const l3 = document.getElementById('line-3');
+  if (l3) l3.className = 'phase-step-line' + (currentIdx >= 3 ? ' done' : '');
+
+  // Rescue Certainty Bar
+  _displayedCertainty += (certainty - _displayedCertainty) * 0.08;
+  const dispC = Math.round(_displayedCertainty);
+  const certPctEl = document.getElementById('certainty-pct');
+  if (certPctEl) certPctEl.textContent = `${dispC}%`;
+  const certBar = document.getElementById('certainty-bar');
+  const certColor = dispC >= 68 ? 'var(--clr-solidify)'
+                  : dispC >= 30 ? 'var(--clr-converge)'
+                  : 'var(--clr-spread)';
+  if (certBar) {
+    certBar.style.width = `${dispC}%`;
+    certBar.style.background = certColor;
+  }
+  if (certPctEl) certPctEl.style.color = certColor;
+
+  // Multi-Modal Consensus Channels
+  if (stats.channels) {
+    const { thermal, audio, camera, gas } = stats.channels;
+    const mmTh = document.getElementById('mm-val-thermal');
+    if (mmTh) mmTh.textContent = thermal;
+    const mmAu = document.getElementById('mm-val-audio');
+    if (mmAu) mmAu.textContent = audio;
+    const camEl = document.getElementById('mm-val-camera');
+    if (camEl) camEl.textContent = camera || 'LOW';
+    const mmGs = document.getElementById('mm-val-gas');
+    if (mmGs) mmGs.textContent = gas;
+
+    const bTh = document.getElementById('mm-thermal');
+    if (bTh) bTh.classList.toggle('active', thermal.startsWith('ACTIVE'));
+    const bAu = document.getElementById('mm-audio');
+    if (bAu) bAu.classList.toggle('active', audio.startsWith('ACTIVE'));
+    const camBox = document.getElementById('mm-camera');
+    if (camBox) camBox.classList.toggle('active', camera && camera.startsWith('ACTIVE'));
+    const bGs = document.getElementById('mm-gas');
+    if (bGs) bGs.classList.toggle('active', gas.startsWith('ACTIVE'));
+  }
+  const maxUnique = stats.maxUniqueCorroboration || 0;
+  const uniqueEl = document.getElementById('unique-drone-count');
+  if (uniqueEl) {
+    uniqueEl.textContent = `${maxUnique} Drone${maxUnique !== 1 ? 's' : ''}`;
+    uniqueEl.style.color = maxUnique >= 3 ? 'var(--clr-solidify)' : maxUnique >= 1 ? 'var(--clr-converge)' : 'var(--clr-text-faint)';
+  }
+
+  // False Positive Counter
   if (zonePresence) {
     const debrisCount = zonePresence.HOT_DEBRIS ? zonePresence.HOT_DEBRIS.count : 0;
     const windCount = zonePresence.WIND_NOISE ? zonePresence.WIND_NOISE.count : 0;
@@ -822,19 +980,98 @@ function updateUI() {
       _falsePositives += debrisCount + windCount;
     }
   }
-  document.getElementById('fp-count').textContent = _falsePositives;
+  const fpCountEl = document.getElementById('fp-count');
+  if (fpCountEl) fpCountEl.textContent = _falsePositives;
 
-  // ── Live Debate Feed ────────────────────────────────────────────────────
+  // Live Debate Feed
   if (tick % 3 === 0) updateDebateFeed(drones, tick);
 
-  // ── Live Event Feed ─────────────────────────────────────────────────────
+  // Live Event Feed
   if (eventLog.length !== _lastEventCount) {
     _lastEventCount = eventLog.length;
     renderEventLog();
   }
 
-  // ── Individual Drone Telemetry Roster ───────────────────────────────────
+  // Survivors & Fleet Telemetry Side-By-Side Dropdown Views
+  syncSurvivorDropdown(survivorTargets);
+  renderSurvivorCards(survivorTargets);
+  syncDroneDropdown(drones);
   updateDroneRoster(drones);
+}
+
+// ─── Survivors & Drones Side-by-Side Intelligence Handlers ──────────────────
+
+let _lastSurvivorKey = '';
+function syncSurvivorDropdown(targets) {
+  const dd = document.getElementById('survivor-dropdown');
+  if (!dd || !targets) return;
+  const key = targets.map(t => `${t.id}:${t.status}`).join('|');
+  if (key === _lastSurvivorKey && dd.options.length === targets.length + 1) return;
+  _lastSurvivorKey = key;
+  const curVal = dd.value || 'ALL';
+  dd.innerHTML = `<option value="ALL">All Targets (${targets.length})</option>` +
+    targets.map(t => `<option value="${t.id}">${t.name} [${t.status}]</option>`).join('');
+  dd.value = curVal;
+}
+
+function renderSurvivorCards(targets) {
+  const container = document.getElementById('target-cards-list');
+  const dropdown = document.getElementById('survivor-dropdown');
+  const badge = document.getElementById('survivor-score-text');
+  if (!container || !targets) return;
+
+  const total = targets.length;
+  const extracted = targets.filter(t => t.status === 'EXTRACTED').length;
+  if (badge) badge.textContent = `${extracted} / ${total}`;
+
+  const selectedVal = dropdown ? dropdown.value : 'ALL';
+  const filtered = (selectedVal === 'ALL') ? targets : targets.filter(t => t.id === selectedVal);
+
+  container.innerHTML = filtered.map(t => {
+    const isDone = t.status === 'EXTRACTED';
+    const isDispatch = t.status === 'RESCUE_DISPATCH';
+    const isConv = t.status === 'CONVERGING';
+    const isFocus = t.isPrimaryTarget;
+
+    const statusBadge = isDone ? '<span class="t-badge done">EXTRACTED</span>'
+                      : isDispatch ? '<span class="t-badge dispatch">DISPATCH</span>'
+                      : isConv ? '<span class="t-badge conv">CONVERGE</span>'
+                      : '<span class="t-badge search">SEARCH</span>';
+
+    const focusBadge = isFocus ? '<span class="t-badge focus">FOCUS</span>' : '';
+    const confPct = Math.round((t.confidence || 0) * 100);
+    const barColor = isDone ? '#3ddc68' : isDispatch ? '#ff4d6d' : isConv ? '#ffd60a' : '#4cc9f0';
+
+    return `
+      <div class="target-card ${isDone ? 'done' : isDispatch ? 'dispatch' : ''} ${isFocus ? 'is-focus' : ''}" data-target-id="${t.id}">
+        <div class="t-card-top">
+          <span class="t-name">${t.name} ${focusBadge}</span>
+          ${statusBadge}
+        </div>
+        <div class="t-card-sub">${t.sector || 'SECTOR'} · (${t.col}, ${t.row})</div>
+        <div class="t-card-score-row" style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;font-size:0.58rem">
+          <span style="color:var(--clr-text-faint);font-family:'Space Mono',monospace">CONFIDENCE:</span>
+          <strong style="color:${barColor};font-family:'Space Mono',monospace;font-size:0.62rem">${confPct}%</strong>
+        </div>
+        <div class="certainty-bar-track" style="height:2px;margin-top:2px;background:rgba(255,255,255,0.05)">
+          <div class="certainty-bar-fill" style="width:${confPct}%;background:${barColor}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+let _lastDroneKey = '';
+function syncDroneDropdown(drones) {
+  const dd = document.getElementById('drone-dropdown');
+  if (!dd || !drones) return;
+  const key = `${drones.length}:${drones.map(d => `${d.id}:${d.role}`).join(',')}`;
+  if (key === _lastDroneKey && dd.options.length === drones.length + 1) return;
+  _lastDroneKey = key;
+  const curVal = dd.value || 'ALL';
+  dd.innerHTML = `<option value="ALL">All Drones (${drones.length})</option>` +
+    drones.map(d => `<option value="${d.id}">#${d.id} ${d.callsign} (${d.role})</option>`).join('');
+  dd.value = curVal;
 }
 
 function selectDrone(droneId) {
@@ -852,31 +1089,18 @@ function selectDrone(droneId) {
 function updateDroneRoster(drones) {
   const listEl = document.getElementById('drone-cards-list');
   const badgeEl = document.getElementById('roster-count-badge');
+  const dropdown = document.getElementById('drone-dropdown');
   if (!listEl || !drones) return;
 
-  const searchVal = (document.getElementById('drone-search')?.value || '').trim().toUpperCase();
-  const roleFilter = document.getElementById('drone-filter-role')?.value || 'ALL';
-
-  const filtered = drones.filter(d => {
-    if (searchVal) {
-      const matchCall = (d.callsign || '').toUpperCase().includes(searchVal);
-      const matchId = d.id.toString() === searchVal;
-      if (!matchCall && !matchId) return false;
-    }
-    if (roleFilter === 'SCOUT' && d.role !== 'SCOUT') return false;
-    if (roleFilter === 'RELAY' && d.role !== 'RELAY') return false;
-    if (roleFilter === 'SENTINEL' && d.role !== 'SENTINEL') return false;
-    if (roleFilter === 'STIGMERGIC' && d.decisionMode !== 'STIGMERGIC') return false;
-    if (roleFilter === 'LOWBAT' && d.battery > 20) return false;
-    return true;
-  });
+  const selectedVal = dropdown ? dropdown.value : 'ALL';
+  const filtered = (selectedVal === 'ALL') ? drones : drones.filter(d => d.id.toString() === selectedVal);
 
   if (badgeEl) {
     badgeEl.textContent = `${filtered.length} / ${drones.length} Drones`;
   }
 
   if (filtered.length === 0) {
-    listEl.innerHTML = '<div style="font:400 9.5px monospace;color:var(--clr-text-faint);text-align:center;padding:12px 0;">No matching drones found</div>';
+    listEl.innerHTML = '<div style="font:400 9px monospace;color:var(--clr-text-faint);text-align:center;padding:8px 0;">No drones matching</div>';
     return;
   }
 
@@ -885,17 +1109,29 @@ function updateDroneRoster(drones) {
     const roleClass = d.role === 'RELAY' ? 'relay' : d.role === 'SENTINEL' ? 'sentinel' : 'scout';
     const battColor = d.battery > 50 ? '#3ddc68' : d.battery > 20 ? '#ffd60a' : '#ff4d6d';
     const modeBadge = d.decisionMode === 'STIGMERGIC'
-      ? '<span class="drone-badge stig" title="Stigmergic Pheromone Fallback">📵 STIG</span>'
-      : '<span class="drone-badge" style="background:rgba(61,220,104,0.12);color:#3ddc68;border:1px solid rgba(61,220,104,0.25)" title="Full Radio Comms">📶 FULL</span>';
+      ? '<span class="drone-badge stig" title="Stigmergic Fallback">STIG</span>'
+      : '<span class="drone-badge" style="background:rgba(61,220,104,0.12);color:#3ddc68;border:1px solid rgba(61,220,104,0.25)" title="Radio Mesh">FULL</span>';
+
+    const secBadge = d.isQuarantined
+      ? '<span class="drone-badge" style="background:rgba(157,78,221,0.22);color:#c77dff;border:1px solid #9d4edd">ISOLATED</span>'
+      : d.isRogue
+      ? '<span class="drone-badge" style="background:rgba(255,0,85,0.22);color:#ff0055;border:1px solid #ff0055">ROGUE</span>'
+      : '';
+
+    const trust = swarm && typeof swarm.getAverageTrust === 'function'
+      ? Math.round(swarm.getAverageTrust(d.id) * 100)
+      : 100;
+    const trustColor = trust > 70 ? '#3ddc68' : trust > 40 ? '#ffd60a' : '#ff0055';
 
     return `
-      <div class="drone-card ${isSelected ? 'selected' : ''}" id="drone-card-${d.id}" data-id="${d.id}">
+      <div class="drone-card ${isSelected ? 'selected' : ''} ${d.isRogue ? 'rogue-card' : ''} ${d.isQuarantined ? 'quarantined-card' : ''}" id="drone-card-${d.id}" data-id="${d.id}">
         <div class="drone-card-top">
           <div class="drone-callsign-wrap">
             <span class="drone-callsign">${d.callsign || 'DRONE'}</span>
             <span class="drone-id-tag">#${d.id.toString().padStart(2, '0')}</span>
           </div>
           <div class="drone-badges">
+            ${secBadge}
             <span class="drone-badge ${roleClass}">${d.role}</span>
             ${modeBadge}
           </div>
@@ -909,12 +1145,12 @@ function updateDroneRoster(drones) {
           <span style="color:var(--clr-text-faint);margin-left:auto">${d.altitude || 25}m</span>
         </div>
         <div class="drone-card-row">
-          <span>POS: (${d.x.toFixed(1)}, ${d.y.toFixed(1)}) [${d.col},${d.row}]</span>
-          <span style="color:var(--clr-text)">${(d.currentSpeed || 0).toFixed(1)} m/s</span>
+          <span>POS: [${d.col},${d.row}]</span>
+          <span style="color:${trustColor}">TRUST: ${trust}%</span>
         </div>
-        <div class="drone-card-row" style="color:var(--clr-text-faint);font-size:8.5px">
+        <div class="drone-card-row" style="color:var(--clr-text-faint);font-size:8px">
           <span>DIST: ${(d.totalDistance || 0).toFixed(0)}m</span>
-          <span>BASE: ${(d.distanceToBase || 0).toFixed(0)}m</span>
+          <span>SPD: ${(d.currentSpeed || 0).toFixed(1)}m/s</span>
           <span style="color:${d.regime === 'SOLIDIFY' ? '#ff4d6d' : d.regime === 'CONVERGE' ? '#ffd60a' : '#4cc9f0'}">${d.regime}</span>
         </div>
       </div>
@@ -933,16 +1169,15 @@ function renderEventLog() {
   const log = document.getElementById('event-log');
   const entries = swarm.eventLog.slice(0, 8);
   if (entries.length === 0) {
-    log.innerHTML = '<li class="event-empty">Waiting for activity…</li>';
+    log.innerHTML = '<li class="event-empty">Waiting for activity...</li>';
     return;
   }
   log.innerHTML = entries.map((e, i) => `
     <li class="event-entry ${i === 0 ? 'event-new' : ''}" style="opacity:${1 - i * 0.12}">
-      <span class="event-icon">${e.icon}</span>
-      <div class="event-body">
+      <span class="event-body">
         <span class="event-text">${e.text}</span>
         <span class="event-tick">t=${e.tick}</span>
-      </div>
+      </span>
     </li>
   `).join('');
 }
@@ -984,10 +1219,19 @@ document.getElementById('sim-canvas').addEventListener('click', e => {
 
 document.getElementById('scenario-select').addEventListener('change', resetSim);
 document.getElementById('drone-count').addEventListener('change', resetSim);
-const searchEl = document.getElementById('drone-search');
-if (searchEl) searchEl.addEventListener('input', () => updateDroneRoster(swarm ? swarm.drones : []));
-const filterRoleEl = document.getElementById('drone-filter-role');
-if (filterRoleEl) filterRoleEl.addEventListener('change', () => updateDroneRoster(swarm ? swarm.drones : []));
+
+document.getElementById('survivor-dropdown')?.addEventListener('change', () => {
+  renderSurvivorCards(swarm ? swarm.survivorTargets : []);
+});
+document.getElementById('drone-dropdown')?.addEventListener('change', e => {
+  const val = e.target.value;
+  if (val !== 'ALL') {
+    selectDrone(parseInt(val, 10));
+  } else {
+    selectDrone(null);
+  }
+  updateDroneRoster(swarm ? swarm.drones : []);
+});
 
 document.getElementById('btn-toggle-satellite').addEventListener('click', e => {
   visualizer.showSatelliteMode = !visualizer.showSatelliteMode;
@@ -1010,7 +1254,24 @@ document.getElementById('btn-force-rtl').addEventListener('click', () => {
     swarm.isMissionComplete = true;
     swarm.stats.dominantRegime = 'RESCUED';
     swarm._hasLoggedRTL = true;
-    swarm._addEvent('🏠', `MANUAL OVERRIDE: Return-To-Launch (RTL) initiated by operator. All drones returning to base station.`);
+    swarm._addEvent('[RTL]', `MANUAL OVERRIDE: Return-To-Launch (RTL) initiated by operator. All drones returning to base station.`);
+  }
+});
+
+// ═══ CYBER-PHYSICAL SECURITY & BYZANTINE FAULT TOLERANCE LISTENERS ═════════
+document.getElementById('btn-inject-rogue')?.addEventListener('click', () => {
+  if (swarm) swarm.injectRogueDrone();
+});
+document.getElementById('btn-side-inject-rogue')?.addEventListener('click', () => {
+  if (swarm) swarm.injectRogueDrone();
+});
+document.getElementById('btn-side-neutralize')?.addEventListener('click', () => {
+  if (swarm) swarm.neutralizeRogueDrones();
+});
+document.getElementById('btn-toggle-bft')?.addEventListener('click', e => {
+  if (swarm) {
+    const active = swarm.toggleByzantineDefense();
+    e.currentTarget.classList.toggle('active', active);
   }
 });
 
@@ -1019,6 +1280,12 @@ document.addEventListener('keydown', e => {
   switch (e.code) {
     case 'Space': e.preventDefault(); isRunning ? pauseLoop() : startLoop(); break;
     case 'KeyR':  resetSim(); break;
+    case 'KeyB':
+      if (swarm) {
+        const active = swarm.toggleByzantineDefense();
+        document.getElementById('btn-toggle-bft')?.classList.toggle('active', active);
+      }
+      break;
     case 'KeyS':
       visualizer.showSatelliteMode = !visualizer.showSatelliteMode;
       document.getElementById('btn-toggle-satellite').classList.toggle('active', visualizer.showSatelliteMode);

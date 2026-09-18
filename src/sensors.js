@@ -19,6 +19,8 @@
  *   - Passive Thermal: provides 'thermal' channel base values
  */
 
+import { getPINNThermalReading } from './pinn.js';
+
 // Noise parameter — controls how uncertain individual readings look
 const NOISE_SIGMA = 0.08; // ≈ calibrated to RoboCup Rescue-style sensor variability
 
@@ -92,14 +94,14 @@ function realValue(cellType, channel, fallback) {
 
 const PROFILES = {
   SURVIVOR: (tick) => ({
-    thermal: gaussian(realValue('SURVIVOR', 'thermal', 0.82) + wobble(tick, 0.7, 0.04), NOISE_SIGMA),
+    thermal: gaussian(getPINNThermalReading(true, tick, realValue('SURVIVOR', 'thermal', 0.82)) + wobble(tick, 0.7, 0.04), NOISE_SIGMA),
     audio:   gaussian(realValue('SURVIVOR', 'audio', 0.75)   + wobble(tick, 1.3, 0.08), NOISE_SIGMA * 1.2),
     camera:  gaussian(realValue('SURVIVOR', 'camera', 0.88)  + wobble(tick, 0.5, 0.05), NOISE_SIGMA * 0.8),
     gas:     gaussian(0.45 + wobble(tick, 0.4, 0.03), NOISE_SIGMA),
   }),
 
   HOT_DEBRIS: (tick) => ({
-    thermal: gaussian(realValue('HOT_DEBRIS', 'thermal', 0.82) + wobble(tick, 0.3, 0.03), NOISE_SIGMA * 0.7),
+    thermal: gaussian(getPINNThermalReading(false, tick, realValue('HOT_DEBRIS', 'thermal', 0.82)) + wobble(tick, 0.3, 0.03), NOISE_SIGMA * 0.7),
     audio:   gaussian(realValue('HOT_DEBRIS', 'audio', 0.07),                              NOISE_SIGMA * 0.6),
     camera:  gaussian(realValue('HOT_DEBRIS', 'camera', 0.02),                              NOISE_SIGMA * 0.4),
     gas:     gaussian(0.12, NOISE_SIGMA * 0.8),

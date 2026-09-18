@@ -37,7 +37,41 @@ export class Swarm {
       dominantRegime: 'SPREAD',
       // Self-Healing Comms Stats
       commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
+      // Byzantine Cyber-Physical Security Stats
+      securityStats: {
+        rogueCount: 0,
+        attacksAttempted: 0,
+        attacksBlocked: 0,
+        quarantinedCount: 0,
+        defenseActive: true,
+      },
+      // Multi-Agent Debate Tracking
+      debateStats: {
+        proposals: 0,
+        agrees: 0,
+        rejects: 0,
+        consensusConfirmed: 0,
+      },
+      // NOAA Agent Negotiation Tracking
+      nooaStats: {
+        accessCount: 0,
+        successCount: 0,
+        lastDecision: 'IDLE',
+      },
+      // Relay Mesh Network Stats
+      relayStats: {
+        activeRelays: 0,
+        packetsRelayed: 0,
+      },
     };
+
+    // ═══ CYBER-PHYSICAL SECURITY & BYZANTINE FAULT TOLERANCE ═════════════════
+    this.byzantineDefenseEnabled = true;
+    this.quarantinedDrones = new Set();
+    this.securityStats = this.stats.securityStats;
+    this.debateStats = this.stats.debateStats;
+    this.nooaStats = this.stats.nooaStats;
+    this.relayStats = this.stats.relayStats;
 
     // Zone presence — how many drones are currently in each zone type
     // Used by the narrative panel to show "X drones near SURVIVOR zone"
@@ -69,6 +103,72 @@ export class Swarm {
     // NOOA Multi-Agent Tactical Negotiation State (Non-blocking & Deduplicated)
     this._activeNOOASectors = new Set();
     this._nooaInFlightCount = 0;
+  }
+
+  // ─── Cyber-Physical Security & Byzantine Fault Tolerance Controls ──────────
+
+  /**
+   * Inject a Byzantine attack by compromising an active drone.
+   * @param {number} [targetId]
+   */
+  injectRogueDrone(targetId) {
+    let target = null;
+    if (targetId !== undefined) {
+      target = this.drones.find(d => d.id === targetId);
+    } else {
+      // Pick first non-rogue drone
+      target = this.drones.find(d => !d.isRogue && !d.isSentinel) || this.drones[0];
+    }
+    if (!target) return;
+    target.isRogue = true;
+    target.spoofTicks = 0;
+    this.securityStats.rogueCount = this.drones.filter(d => d.isRogue).length;
+    this._addEvent('🔴', `[SECURITY ALERT] Drone #${target.id} (${target.callsign}) COMPROMISED! Injected with Byzantine exploit. Broadcasting forged ghost targets.`);
+  }
+
+  /**
+   * Neutralize rogue drones, restore trust ratings, and clear quarantine.
+   */
+  neutralizeRogueDrones() {
+    for (const d of this.drones) {
+      d.isRogue = false;
+      d.isQuarantined = false;
+      d.peerTrust.clear();
+      d.securityViolations = 0;
+    }
+    this.quarantinedDrones.clear();
+    this.securityStats.rogueCount = 0;
+    this.securityStats.quarantinedCount = 0;
+    this.securityStats.attacksAttempted = 0;
+    this.securityStats.attacksBlocked = 0;
+    this._addEvent('🟢', `[SECURITY COUNTERMEASURE] Swarm cryptographically re-keyed. All rogue agents neutralized. Trust ratings restored to 1.0.`);
+  }
+
+  /**
+   * Toggle Byzantine Fault Defense on/off to benchmark swarm vulnerability.
+   */
+  toggleByzantineDefense() {
+    this.byzantineDefenseEnabled = !this.byzantineDefenseEnabled;
+    this.securityStats.defenseActive = this.byzantineDefenseEnabled;
+    const status = this.byzantineDefenseEnabled ? 'ENABLED (Consensus Protected)' : 'DISABLED (Vulnerable to Spoofing)';
+    this._addEvent('🛡️', `Byzantine Defense is now ${status}.`);
+    return this.byzantineDefenseEnabled;
+  }
+
+  /**
+   * Calculate average peer trust rating for a given drone across all other drones.
+   * @param {number} droneId
+   * @returns {number} Average trust in [0.0, 1.0]
+   */
+  getAverageTrust(droneId) {
+    let total = 0, count = 0;
+    for (const d of this.drones) {
+      if (d.id !== droneId) {
+        total += d.getPeerTrust(droneId);
+        count++;
+      }
+    }
+    return count > 0 ? (total / count) : 1.0;
   }
 
   /**
@@ -157,7 +257,34 @@ export class Swarm {
       roleCounts: { SCOUT: 0, RELAY: 0, SENTINEL: 0 },
       dominantRegime: 'SPREAD',
       commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
+      securityStats: {
+        rogueCount: 0,
+        attacksAttempted: 0,
+        attacksBlocked: 0,
+        quarantinedCount: 0,
+        defenseActive: this.byzantineDefenseEnabled,
+      },
+      debateStats: {
+        proposals: 0,
+        agrees: 0,
+        rejects: 0,
+        consensusConfirmed: 0,
+      },
+      nooaStats: {
+        accessCount: 0,
+        successCount: 0,
+        lastDecision: 'IDLE',
+      },
+      relayStats: {
+        activeRelays: 0,
+        packetsRelayed: 0,
+      },
     };
+    this.quarantinedDrones.clear();
+    this.securityStats = this.stats.securityStats;
+    this.debateStats = this.stats.debateStats;
+    this.nooaStats = this.stats.nooaStats;
+    this.relayStats = this.stats.relayStats;
     this._activeNOOASectors.clear();
     this._nooaInFlightCount = 0;
     this.field.reset();
@@ -387,8 +514,60 @@ export class Swarm {
     for (const sender of this.drones) {
       if (sender.outbox.length === 0) continue;
 
+      // ═══ BYZANTINE FAULT TOLERANCE: Blacklist Quarantine ═══
+      if (this.byzantineDefenseEnabled && sender.isQuarantined) {
+        this.securityStats.attacksAttempted += sender.outbox.length;
+        this.securityStats.attacksBlocked += sender.outbox.length;
+        sender.outbox = [];
+        continue;
+      }
+
       for (const msg of sender.outbox) {
+        // Track attack metrics: forged candidate proposals or rogue spoofing
+        const isMalicious = msg.isForged || (sender.isRogue && (msg.type === 'CANDIDATE_PROPOSAL' || msg.confidence >= 0.70));
+        if (isMalicious) {
+          this.securityStats.attacksAttempted++;
+        }
+
+        // ═══ BYZANTINE SPOOFING DETECTION & QUARANTINE ═══
+        if (msg.type === 'CANDIDATE_PROPOSAL' && this.byzantineDefenseEnabled) {
+          const actualType = this.sensors.scenario.getCellType(msg.col, msg.row);
+          const isRealSurvivor = (actualType === 'SURVIVOR');
+
+          // Adversarial check: forged Byzantine payload or claiming high confidence at a non-survivor cell
+          if (msg.isForged || (!isRealSurvivor && msg.confidence >= 0.70)) {
+            sender.securityViolations = (sender.securityViolations || 0) + 1;
+
+            // Multi-agent peer trust slashing across all honest peers
+            for (const peer of this.drones) {
+              if (peer.id !== sender.id && !peer.isRogue) {
+                peer.penalizePeer(sender.id, 0.70);
+              }
+            }
+
+            const avgTrust = this.getAverageTrust(sender.id);
+            if (avgTrust < 0.35 && !sender.isQuarantined) {
+              sender.isQuarantined = true;
+              this.quarantinedDrones.add(sender.id);
+              this.securityStats.quarantinedCount = this.quarantinedDrones.size;
+              // Clear any false attractant pheromone deposited by rogue drone
+              this.field.clearLocalAttraction(msg.col, msg.row, 3.0, false);
+              this._addEvent('🛡️', `[BFT ATTACK BLOCKED] Byzantine spoofing detected! Drone #${sender.id} (${sender.callsign}) broadcast forged C=${(msg.confidence * 100).toFixed(0)}% at empty sector (${msg.col},${msg.row}). Honest peers cross-verified sensor mismatch. Trust slashed to ${(avgTrust * 100).toFixed(0)}% → NODE QUARANTINED.`);
+            }
+
+            this.securityStats.attacksBlocked++;
+            continue; // Drop the spoofed proposal — do not route to honest peers!
+          }
+        }
+
         // Deliver to all drones within radio range
+        if (msg.type === 'CANDIDATE_PROPOSAL') {
+          this.debateStats.proposals++;
+        }
+        if (sender.role === 'RELAY') {
+          this.relayStats.packetsRelayed++;
+        }
+
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
           // Self-healing: probabilistic link quality gate replaces hard distance check
@@ -463,6 +642,11 @@ export class Swarm {
 
         // Log debate votes and consensus to event feed
         if (msg.type === 'VOTE_CAST') {
+          if (msg.vote === 'AGREE') {
+            this.debateStats.agrees++;
+          } else if (msg.vote === 'REJECT') {
+            this.debateStats.rejects++;
+          }
           const emoji = msg.vote === 'AGREE' ? '✅ YES' : '❌ NO';
           const headingDeg = Math.round((msg.heading * 180 / Math.PI + 360) % 360);
           const debateKey2 = `vote-${msg.callsign}-${msg.targetCol},${msg.targetRow}`;
@@ -474,6 +658,7 @@ export class Swarm {
             this._addEvent(emoji, `Agent ${msg.callsign} [${headingDeg}° angle] votes ${msg.vote} @ (${msg.targetCol},${msg.targetRow}): "${reasoning}"`);
           }
         } else if (msg.type === 'CONSENSUS_CONFIRMED') {
+          this.debateStats.consensusConfirmed++;
           const debateKey3 = `consensus-${msg.col},${msg.row}`;
           if (!this._debateLogThrottle.has(debateKey3)) {
             this._debateLogThrottle.add(debateKey3);
@@ -490,6 +675,9 @@ export class Swarm {
       }
       sender.outbox = [];
     }
+
+    // Update active relays count
+    this.relayStats.activeRelays = this.drones.filter(d => d.role === 'RELAY').length;
 
     // Process vote messages received in second pass
     for (const drone of this.drones) {
@@ -865,6 +1053,7 @@ export class Swarm {
     if (!this._activeNOOASectors) this._activeNOOASectors = new Set();
     this._activeNOOASectors.add(sectorKey);
     this._nooaInFlightCount = (this._nooaInFlightCount || 0) + 1;
+    this.nooaStats.accessCount = (this.nooaStats.accessCount || 0) + 1;
 
     const peerAngles = localPeers.map(p => p.heading);
     const controller = new AbortController();
@@ -892,6 +1081,9 @@ export class Swarm {
         setTimeout(() => this._activeNOOASectors.delete(sectorKey), 3000); // 3s cooldown
 
         if (data && data.is_valid && data.decision) {
+          this.nooaStats.successCount = (this.nooaStats.successCount || 0) + 1;
+          this.nooaStats.lastDecision = data.decision;
+
           beeceptor.logNOOADebate({
             lead_agent: proposer.callsign,
             sector: `(${col}, ${row})`,
@@ -901,7 +1093,6 @@ export class Swarm {
             reasoning: data.reasoning,
             peer_angles: peerAngles,
           });
-
           if (data.decision === 'CONFIRM') {
             this._addEvent('🤖', `[NOOA NEGOTIATOR] ${data.reasoning}`);
             this.field.deposit(col, row, 0.40, proposer.id, data.confidence, 0.05);
