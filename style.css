@@ -1201,6 +1201,14 @@ select:focus {
   flex-direction: column;
   gap: 6px;
   margin-top: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.target-cards-list::-webkit-scrollbar { width: 3px; }
+.target-cards-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
 }
 .target-card {
   display: flex;
@@ -1251,4 +1259,172 @@ select:focus {
 .target-card.is-focus {
   border-color: rgba(251, 188, 4, 0.40);
   background: var(--clr-yellow-bg);
+}
+
+/* ─── Fleet Telemetry Row ─────────────────────────────────────────────────── */
+.fleet-telemetry-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Individual Drone Telemetry Roster ───────────────────────────────────── */
+.drone-roster-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.roster-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.roster-badge {
+  font: 700 9px var(--font-mono);
+  color: #4cc9f0;
+  background: rgba(76, 201, 240, 0.12);
+  border: 1px solid rgba(76, 201, 240, 0.25);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+.drone-roster-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.drone-filter-input {
+  flex: 1;
+  background: rgba(15, 20, 30, 0.7);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-xs);
+  color: var(--clr-text);
+  font: 10px var(--font-ui);
+  padding: 4px 8px;
+  outline: none;
+  min-width: 0;
+}
+.drone-filter-input:focus {
+  border-color: #4cc9f0;
+}
+.drone-filter-select {
+  background: rgba(15, 20, 30, 0.7);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-xs);
+  color: var(--clr-text);
+  font: 10px var(--font-ui);
+  padding: 4px 6px;
+  outline: none;
+  cursor: pointer;
+  width: auto;
+}
+.drone-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 230px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.drone-cards-list::-webkit-scrollbar { width: 3px; }
+.drone-cards-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+.drone-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 9px;
+  border-radius: var(--radius-xs);
+  background: rgba(15, 20, 30, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.drone-card:hover {
+  background: rgba(20, 30, 48, 0.75);
+  border-color: rgba(76, 201, 240, 0.35);
+}
+.drone-card.selected {
+  background: rgba(0, 240, 255, 0.10);
+  border-color: #00f0ff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+}
+.drone-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  line-height: 1.2;
+}
+.drone-callsign-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.drone-callsign {
+  font: 700 10.5px var(--font-mono);
+  color: #ffffff;
+}
+.drone-id-tag {
+  font: 500 8.5px var(--font-mono);
+  color: var(--clr-text-faint);
+}
+.drone-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.drone-badge {
+  font: 700 8px var(--font-mono);
+  padding: 1.5px 5px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+}
+.drone-badge.scout {
+  background: rgba(76, 201, 240, 0.15);
+  color: #4cc9f0;
+  border: 1px solid rgba(76, 201, 240, 0.25);
+}
+.drone-badge.relay {
+  background: rgba(0, 240, 255, 0.15);
+  color: #00f0ff;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+}
+.drone-badge.sentinel {
+  background: rgba(255, 158, 0, 0.15);
+  color: #ff9e00;
+  border: 1px solid rgba(255, 158, 0, 0.35);
+}
+.drone-badge.stig {
+  background: rgba(255, 77, 109, 0.15);
+  color: #ff4d6d;
+  border: 1px solid rgba(255, 77, 109, 0.35);
+}
+.drone-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: 400 9px var(--font-mono);
+  color: var(--clr-text-dim);
+}
+.drone-card-batt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 9px var(--font-mono);
+}
+.drone-card-batt-track {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.drone-card-batt-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease, background 0.3s ease;
 }

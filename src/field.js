@@ -159,11 +159,39 @@ export class PheromoneField {
   }
 
   /**
+   * Get maximum pheromone strength within a local radius around (col, row).
+   */
+  getLocalMaxStrength(col, row, radius = 1) {
+    let maxS = 0;
+    for (let dc = -radius; dc <= radius; dc++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        const s = this.getStrength(col + dc, row + dr);
+        if (s > maxS) maxS = s;
+      }
+    }
+    return maxS;
+  }
+
+  /**
    * Get count of unique visiting drones for a grid cell.
    */
   getUniqueDroneCount(col, row) {
     if (!this._inBounds(col, row)) return 0;
     return this.uniqueDroneCount[row * this.cols + col];
+  }
+
+  /**
+   * Get maximum unique visiting drones within a local radius around (col, row).
+   */
+  getLocalUniqueDroneCount(col, row, radius = 1) {
+    let maxU = 0;
+    for (let dc = -radius; dc <= radius; dc++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        const u = this.getUniqueDroneCount(col + dc, row + dr);
+        if (u > maxU) maxU = u;
+      }
+    }
+    return maxU;
   }
 
   /**

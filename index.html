@@ -7,7 +7,7 @@
   <meta name="description" content="Decentralized disaster-zone search-and-rescue swarm inspired by Physarum polycephalum slime mold." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="style.css?v=51" />
+  <link rel="stylesheet" href="style.css?v=52" />
 </head>
 <body>
 
@@ -16,7 +16,7 @@
   <!-- ═══ FULL-BLEED CANVAS (background layer) ════════════════════════════ -->
   <main id="canvas-wrap">
     <canvas id="sim-canvas"></canvas>
-    <div id="tick-overlay">TICK <span id="tick-value">000000</span> · <span id="mission-timer">00:00</span></div>
+    <div id="tick-overlay">TICK <span id="tick-value">000000</span> · REAL <span id="real-time-val">00:00</span> · SIM <span id="mission-timer">00:00</span> · <span id="hud-spd-val">0.0 m/s</span> · <span id="hud-dist-val">0.0 km</span></div>
     <div id="regime-badge" class="SPREAD">
       <div class="regime-dot-badge"></div>
       <span id="regime-text">SPREAD</span>
@@ -67,9 +67,11 @@
     <div class="toolbar-group">
       <span class="control-label">Scenario</span>
       <select id="scenario-select">
-        <option value="disaster-zone" selected>Disaster Zone (3 Survivors)</option>
+        <option value="catastrophe">Mega Catastrophe (12 Survivors)</option>
+        <option value="mass-casualty">Mass Casualty (8 Survivors)</option>
+        <option value="disaster-zone" selected>Disaster Zone (5 Survivors)</option>
         <option value="multi-survivor">Multi-Survivor (2 Targets)</option>
-        <option value="simple">Single Survivor</option>
+        <option value="simple">Single Survivor (1 Target)</option>
       </select>
     </div>
 
@@ -167,9 +169,59 @@
           <span class="fleet-stat-label">⚡ LOW BAT</span>
           <span class="fleet-stat-val" id="fleet-lowbat" style="color:#ea4335">0</span>
         </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">📵 DEGRADED</span>
+          <span class="fleet-stat-val" id="fleet-degraded" style="color:#ff9500">0</span>
+        </div>
+      </div>
+      <div class="comms-health-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:0.62rem;font-family:'Space Mono',monospace;color:rgba(180,200,240,0.6)">
+        <span>📶 COMMS:</span>
+        <div class="certainty-bar-track" style="flex:1;height:4px;background:rgba(255,255,255,0.06)">
+          <div class="certainty-bar-fill" id="comms-health-bar" style="width:100%;background:#3ddc68;transition:width 0.3s ease,background 0.3s ease"></div>
+        </div>
+        <span id="comms-health-label" style="min-width:32px;text-align:right;color:#3ddc68">100%</span>
+      </div>
+      <div class="fleet-telemetry-row">
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">⏱️ REAL TIME</span>
+          <span class="fleet-stat-val" id="fleet-real-time">00:00</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">⚡ AVG SPEED</span>
+          <span class="fleet-stat-val" id="fleet-avg-speed">0.0 m/s</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-label">📍 TOTAL DIST</span>
+          <span class="fleet-stat-val" id="fleet-total-dist">0.0 km</span>
+        </div>
       </div>
       <div id="battery-alert-bar" class="battery-alert" style="display:none">
         ⚠️ <span id="battery-alert-text">Drone ALPHA-0 battery critical (15%)</span>
+      </div>
+      <div id="comms-alert-bar" class="battery-alert" style="display:none;border-left-color:#ff9500">
+        📵 <span id="comms-alert-text">Comms degraded</span>
+      </div>
+    </section>
+
+    <!-- ⑤ Individual Drone Telemetry Roster ────────────────────────────── -->
+    <section class="panel-section drone-roster-section">
+      <div class="roster-header">
+        <h2 class="panel-title" style="margin-bottom:0">Individual Drone Telemetry</h2>
+        <span class="roster-badge" id="roster-count-badge">0 Drones</span>
+      </div>
+      <div class="drone-roster-controls" style="margin-top:8px;">
+        <input type="text" id="drone-search" placeholder="Filter callsign…" class="drone-filter-input" />
+        <select id="drone-filter-role" class="drone-filter-select">
+          <option value="ALL">All Roles</option>
+          <option value="SCOUT">Scouts</option>
+          <option value="RELAY">Relays</option>
+          <option value="SENTINEL">Sentinels</option>
+          <option value="STIGMERGIC">Degraded Comms</option>
+          <option value="LOWBAT">Low Battery</option>
+        </select>
+      </div>
+      <div class="drone-cards-list" id="drone-cards-list">
+        <!-- Rendered dynamically by JS -->
       </div>
     </section>
 
@@ -249,12 +301,12 @@
 
 <!-- ── Simulation script ───────────────────────────────────────────────── -->
 <script type="module">
-import { PheromoneField }   from './src/field.js?v=43';
-import { DisasterScenario } from './src/scenario.js?v=43';
-import { SensorGenerator }  from './src/sensors.js?v=43';
-import { Swarm }            from './src/swarm.js?v=43';
-import { Visualizer }       from './src/visualizer.js?v=43';
-import { runSweep }         from './src/uncertainty.js?v=43';
+import { PheromoneField }   from './src/field.js?v=53';
+import { DisasterScenario } from './src/scenario.js?v=53';
+import { SensorGenerator }  from './src/sensors.js?v=53';
+import { Swarm }            from './src/swarm.js?v=53';
+import { Visualizer }       from './src/visualizer.js?v=53';
+import { runSweep }         from './src/uncertainty.js?v=53';
 
 const GRID_COLS = 22;
 const GRID_ROWS = 18;
@@ -268,6 +320,7 @@ let _lastEventCount     = 0;
 let _falsePositives     = 0;
 let _lastDebateCount    = 0;
 let _debateMessages     = [];
+let _missionRealElapsedMs = 0;
 const MAX_DEBATE_MSGS   = 20;
 
 // ─── Phase config ─────────────────────────────────────────────────────────
@@ -372,6 +425,7 @@ function loop(timestamp) {
   if (!_lastFrameTime) _lastFrameTime = timestamp;
   const dt = Math.min(timestamp - _lastFrameTime, 100); // cap dt to avoid spiral
   _lastFrameTime = timestamp;
+  _missionRealElapsedMs += dt;
 
   // Accumulate time and step sim at fixed rate
   const tickInterval = SIM_TICK_MS / simSpeed;
@@ -418,6 +472,8 @@ function resetSim() {
   _falsePositives = 0;
   _debateMessages = [];
   _lastDebateCount = 0;
+  _missionRealElapsedMs = 0;
+  if (visualizer) visualizer.selectedDroneId = null;
   document.getElementById('debate-feed').innerHTML = '<div class="debate-empty">Waiting for agent communications…</div>';
   document.getElementById('fp-count').textContent = '0';
   document.getElementById('battery-alert-bar').style.display = 'none';
@@ -506,12 +562,38 @@ function updateUI() {
   const { avgViscosity, clusterCertainty, dominantRegime } = stats;
   const certainty = Math.round((clusterCertainty !== undefined ? clusterCertainty : avgViscosity) * 100);
 
-  // Tick + Mission Timer
+  // Tick + Mission Timer (Sim Time & Real Time)
   document.getElementById('tick-value').textContent = tick.toString().padStart(6, '0');
   const totalSec = Math.floor(tick * 0.062); // ~62ms per tick
   const mm = Math.floor(totalSec / 60).toString().padStart(2, '0');
   const ss = (totalSec % 60).toString().padStart(2, '0');
   document.getElementById('mission-timer').textContent = `${mm}:${ss}`;
+
+  // Real-Time Wall Clock Elapsed
+  const realSec = Math.floor(_missionRealElapsedMs / 1000);
+  const rMm = Math.floor(realSec / 60).toString().padStart(2, '0');
+  const rSs = (realSec % 60).toString().padStart(2, '0');
+  const realTimeStr = `${rMm}:${rSs}`;
+  const rtEl = document.getElementById('real-time-val');
+  if (rtEl) rtEl.textContent = realTimeStr;
+  const fleetRtEl = document.getElementById('fleet-real-time');
+  if (fleetRtEl) fleetRtEl.textContent = realTimeStr;
+
+  // Fleet Average Speed & Total Distance
+  const avgSpeed = stats.fleetAvgSpeed || 0;
+  const totalDist = stats.fleetTotalDistance || 0;
+  const spdStr = `${avgSpeed.toFixed(1)} m/s`;
+  const distStr = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
+
+  const hudSpd = document.getElementById('hud-spd-val');
+  if (hudSpd) hudSpd.textContent = spdStr;
+  const hudDist = document.getElementById('hud-dist-val');
+  if (hudDist) hudDist.textContent = distStr;
+
+  const fleetSpd = document.getElementById('fleet-avg-speed');
+  if (fleetSpd) fleetSpd.textContent = spdStr;
+  const fleetDist = document.getElementById('fleet-total-dist');
+  if (fleetDist) fleetDist.textContent = distStr;
 
   // Scoreboard & Survivor Targets Tracker
   const totalTargets = survivorTargets ? survivorTargets.length : 3;
@@ -643,6 +725,36 @@ function updateUI() {
     alertBar.style.display = 'none';
   }
 
+  // ── Self-Healing Comms Health ─────────────────────────────────────────────
+  const commsStats = stats.commsStats;
+  if (commsStats) {
+    const degradedEl = document.getElementById('fleet-degraded');
+    if (degradedEl) degradedEl.textContent = commsStats.degradedCount;
+
+    const lqPct = Math.round((commsStats.avgLinkQuality || 0) * 100);
+    const healthBar = document.getElementById('comms-health-bar');
+    const healthLabel = document.getElementById('comms-health-label');
+    if (healthBar) {
+      healthBar.style.width = `${lqPct}%`;
+      healthBar.style.background = lqPct >= 70 ? '#3ddc68' : lqPct >= 40 ? '#ffd60a' : '#ff4d6d';
+    }
+    if (healthLabel) {
+      healthLabel.textContent = `${lqPct}%`;
+      healthLabel.style.color = lqPct >= 70 ? '#3ddc68' : lqPct >= 40 ? '#ffd60a' : '#ff4d6d';
+    }
+
+    const commsAlertBar = document.getElementById('comms-alert-bar');
+    if (commsAlertBar) {
+      if (commsStats.degradedCount > 0) {
+        commsAlertBar.style.display = 'block';
+        document.getElementById('comms-alert-text').textContent =
+          `${commsStats.degradedCount} drone${commsStats.degradedCount > 1 ? 's' : ''} in STIGMERGIC mode (LQ: ${(commsStats.avgLinkQuality || 0).toFixed(2)}) — pheromone-only navigation`;
+      } else {
+        commsAlertBar.style.display = 'none';
+      }
+    }
+  }
+
   // ── False Positive Counter ───────────────────────────────────────────────
   if (zonePresence) {
     const debrisCount = zonePresence.HOT_DEBRIS ? zonePresence.HOT_DEBRIS.count : 0;
@@ -661,6 +773,101 @@ function updateUI() {
     _lastEventCount = eventLog.length;
     renderEventLog();
   }
+
+  // ── Individual Drone Telemetry Roster ───────────────────────────────────
+  updateDroneRoster(drones);
+}
+
+function selectDrone(droneId) {
+  if (visualizer) {
+    visualizer.selectedDroneId = (visualizer.selectedDroneId === droneId) ? null : droneId;
+    updateDroneRoster(swarm ? swarm.drones : []);
+    visualizer.render();
+    if (visualizer.selectedDroneId !== null) {
+      const cardEl = document.getElementById(`drone-card-${visualizer.selectedDroneId}`);
+      if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+}
+
+function updateDroneRoster(drones) {
+  const listEl = document.getElementById('drone-cards-list');
+  const badgeEl = document.getElementById('roster-count-badge');
+  if (!listEl || !drones) return;
+
+  const searchVal = (document.getElementById('drone-search')?.value || '').trim().toUpperCase();
+  const roleFilter = document.getElementById('drone-filter-role')?.value || 'ALL';
+
+  const filtered = drones.filter(d => {
+    if (searchVal) {
+      const matchCall = (d.callsign || '').toUpperCase().includes(searchVal);
+      const matchId = d.id.toString() === searchVal;
+      if (!matchCall && !matchId) return false;
+    }
+    if (roleFilter === 'SCOUT' && d.role !== 'SCOUT') return false;
+    if (roleFilter === 'RELAY' && d.role !== 'RELAY') return false;
+    if (roleFilter === 'SENTINEL' && d.role !== 'SENTINEL') return false;
+    if (roleFilter === 'STIGMERGIC' && d.decisionMode !== 'STIGMERGIC') return false;
+    if (roleFilter === 'LOWBAT' && d.battery > 20) return false;
+    return true;
+  });
+
+  if (badgeEl) {
+    badgeEl.textContent = `${filtered.length} / ${drones.length} Drones`;
+  }
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div style="font:400 9.5px monospace;color:var(--clr-text-faint);text-align:center;padding:12px 0;">No matching drones found</div>';
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(d => {
+    const isSelected = visualizer && visualizer.selectedDroneId === d.id;
+    const roleClass = d.role === 'RELAY' ? 'relay' : d.role === 'SENTINEL' ? 'sentinel' : 'scout';
+    const battColor = d.battery > 50 ? '#3ddc68' : d.battery > 20 ? '#ffd60a' : '#ff4d6d';
+    const modeBadge = d.decisionMode === 'STIGMERGIC'
+      ? '<span class="drone-badge stig" title="Stigmergic Pheromone Fallback">📵 STIG</span>'
+      : '<span class="drone-badge" style="background:rgba(61,220,104,0.12);color:#3ddc68;border:1px solid rgba(61,220,104,0.25)" title="Full Radio Comms">📶 FULL</span>';
+
+    return `
+      <div class="drone-card ${isSelected ? 'selected' : ''}" id="drone-card-${d.id}" data-id="${d.id}">
+        <div class="drone-card-top">
+          <div class="drone-callsign-wrap">
+            <span class="drone-callsign">${d.callsign || 'DRONE'}</span>
+            <span class="drone-id-tag">#${d.id.toString().padStart(2, '0')}</span>
+          </div>
+          <div class="drone-badges">
+            <span class="drone-badge ${roleClass}">${d.role}</span>
+            ${modeBadge}
+          </div>
+        </div>
+        <div class="drone-card-batt-row">
+          <span style="color:var(--clr-text-faint)">BAT:</span>
+          <div class="drone-card-batt-track">
+            <div class="drone-card-batt-fill" style="width:${d.battery}%;background:${battColor}"></div>
+          </div>
+          <strong style="color:${battColor}">${d.battery}%</strong>
+          <span style="color:var(--clr-text-faint);margin-left:auto">${d.altitude || 25}m</span>
+        </div>
+        <div class="drone-card-row">
+          <span>POS: (${d.x.toFixed(1)}, ${d.y.toFixed(1)}) [${d.col},${d.row}]</span>
+          <span style="color:var(--clr-text)">${(d.currentSpeed || 0).toFixed(1)} m/s</span>
+        </div>
+        <div class="drone-card-row" style="color:var(--clr-text-faint);font-size:8.5px">
+          <span>DIST: ${(d.totalDistance || 0).toFixed(0)}m</span>
+          <span>BASE: ${(d.distanceToBase || 0).toFixed(0)}m</span>
+          <span style="color:${d.regime === 'SOLIDIFY' ? '#ff4d6d' : d.regime === 'CONVERGE' ? '#ffd60a' : '#4cc9f0'}">${d.regime}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('.drone-card').forEach(el => {
+    el.addEventListener('click', () => {
+      const dId = parseInt(el.getAttribute('data-id'), 10);
+      selectDrone(dId);
+    });
+  });
 }
 
 function renderEventLog() {
@@ -702,11 +909,26 @@ document.getElementById('speed-slider').addEventListener('input', e => {
   document.getElementById('speed-label').textContent = `${simSpeed}×`;
 });
 
+// Canvas click: Select drone if clicked near one; do NOT spawn new drones on empty area!
 document.getElementById('sim-canvas').addEventListener('click', e => {
   const rect = e.currentTarget.getBoundingClientRect();
-  const cell = visualizer.cssToCell(e.clientX - rect.left, e.clientY - rect.top);
-  if (cell) swarm.addDroneAt(cell.col, cell.row);
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+  const hitDrone = visualizer.getDroneAtCss(clickX, clickY, 22);
+  if (hitDrone) {
+    selectDrone(hitDrone.id);
+  } else {
+    // Empty area clicked: do NOT add drone! Deselect selection
+    selectDrone(null);
+  }
 });
+
+document.getElementById('scenario-select').addEventListener('change', resetSim);
+document.getElementById('drone-count').addEventListener('change', resetSim);
+const searchEl = document.getElementById('drone-search');
+if (searchEl) searchEl.addEventListener('input', () => updateDroneRoster(swarm ? swarm.drones : []));
+const filterRoleEl = document.getElementById('drone-filter-role');
+if (filterRoleEl) filterRoleEl.addEventListener('change', () => updateDroneRoster(swarm ? swarm.drones : []));
 
 document.getElementById('btn-toggle-satellite').addEventListener('click', e => {
   visualizer.showSatelliteMode = !visualizer.showSatelliteMode;

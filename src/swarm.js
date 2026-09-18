@@ -9,6 +9,7 @@
  */
 
 import { Drone } from './drone.js';
+import { getLinkQuality, shouldDeliver, getAvgLinkQuality, RADIO_RANGE } from './comms.js';
 
 export class Swarm {
   /**
@@ -19,6 +20,7 @@ export class Swarm {
   constructor(field, sensors, opts = {}) {
     this.field = field;
     this.sensors = sensors;
+    this.scenario = sensors.scenario; // Cached for comms ray-cast occlusion
 
     this.drones = [];
     this.tick = 0;
@@ -31,6 +33,8 @@ export class Swarm {
       regimeCounts: { SPREAD: 0, CONVERGE: 0, SOLIDIFY: 0 },
       roleCounts: { SCOUT: 0, RELAY: 0, SENTINEL: 0 },
       dominantRegime: 'SPREAD',
+      // Self-Healing Comms Stats
+      commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
     };
 
     // Zone presence — how many drones are currently in each zone type
@@ -149,6 +153,7 @@ export class Swarm {
       regimeCounts: { SPREAD: 0, CONVERGE: 0, SOLIDIFY: 0 },
       roleCounts: { SCOUT: 0, RELAY: 0, SENTINEL: 0 },
       dominantRegime: 'SPREAD',
+      commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
     };
     this._activeNOOASectors.clear();
     this._nooaInFlightCount = 0;
@@ -197,8 +202,7 @@ export class Swarm {
     };
 
     // ═══ DUAL-AXIS AUTONOMY: Mesh Topology & Role Determination ══════════════
-    // Evaluate RF mesh neighborhood per drone (RADIO_RANGE = 6.0 units)
-    const RADIO_RANGE = 6.0;
+    // Evaluate RF mesh neighborhood per drone (using comms link quality model)
     const meshTopology = new Map();
     for (const d of this.drones) {
       const neighbors = [];
@@ -227,6 +231,24 @@ export class Swarm {
         isBridge,
         swarmSize: this.drones.length,
       });
+    }
+
+    // ═══ SELF-HEALING COMMS: Per-Drone Link Quality & Mode Transition ═════════
+    let commsLinkSum = 0;
+    let commsDegradedCount = 0;
+    for (const drone of this.drones) {
+      const avgLQ = getAvgLinkQuality(drone, this.drones, this.scenario);
+      const result = drone.updateCommsMode(avgLQ);
+      commsLinkSum += avgLQ;
+      if (drone.decisionMode === 'STIGMERGIC') commsDegradedCount++;
+
+      if (result.changed) {
+        if (result.newMode === 'STIGMERGIC') {
+          this._addEvent('📵', `Drone #${drone.id} entered STIGMERGIC mode (link quality ${avgLQ.toFixed(2)} — rubble occlusion/distance). Falling back to pheromone-only navigation.`);
+        } else {
+          this._addEvent('📶', `Drone #${drone.id} restored FULL comms (link quality ${avgLQ.toFixed(2)}). Radio debate & NOOA negotiation re-enabled.`);
+        }
+      }
     }
 
     for (const drone of this.drones) {
@@ -332,6 +354,7 @@ export class Swarm {
     // Each drone's outbox messages are delivered to nearby drones' inboxes
     // based on radio range (6 grid units). No drone reads another's internal state.
     if (!this._debateLogThrottle) this._debateLogThrottle = new Set();
+    let tickDropped = 0;  // Self-healing: count messages lost to packet loss this tick
 
     for (const sender of this.drones) {
       if (sender.outbox.length === 0) continue;
@@ -340,12 +363,19 @@ export class Swarm {
         // Deliver to all drones within radio range
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
-          const dist = Math.hypot(receiver.x - sender.x, receiver.y - sender.y);
-          if (dist <= RADIO_RANGE) {
+          // Self-healing: probabilistic link quality gate replaces hard distance check
+          const linkQ = getLinkQuality(sender, receiver, this.scenario);
+          if (!shouldDeliver(linkQ)) {
+            tickDropped++;
+            continue;
+          }
+          // Delivered — push to receiver inbox
+          {
             receiver.inbox.push(msg);
 
-            // If this is a CANDIDATE_PROPOSAL and receiver is close, auto-request vote
-            if (msg.type === 'CANDIDATE_PROPOSAL' && dist <= 3.5) {
+            if (msg.type === 'CANDIDATE_PROPOSAL') {
+              const dist = Math.hypot(receiver.x - sender.x, receiver.y - sender.y);
+              if (dist <= 3.5) {
               receiver.inbox.push({
                 type: 'VOTE_REQUEST',
                 fromId: sender.id,
@@ -355,6 +385,7 @@ export class Swarm {
                 tick: this.tick,
               });
             }
+          }
           }
         }
 
@@ -377,6 +408,13 @@ export class Swarm {
       sender.outbox = []; // clear after routing
     }
 
+    // Update comms stats for this tick
+    this.stats.commsStats = {
+      degradedCount: commsDegradedCount,
+      avgLinkQuality: this.drones.length > 0 ? commsLinkSum / this.drones.length : 1.0,
+      messagesDropped: tickDropped,
+    };
+
     // Process all received messages (each agent independently evaluates)
     for (const drone of this.drones) {
       drone.receiveMessages();
@@ -389,8 +427,8 @@ export class Swarm {
         // Route vote responses back to nearby drones (especially the sentinel)
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
-          const dist = Math.hypot(receiver.x - sender.x, receiver.y - sender.y);
-          if (dist <= RADIO_RANGE) {
+          const linkQ = getLinkQuality(sender, receiver, this.scenario);
+          if (shouldDeliver(linkQ)) {
             receiver.inbox.push(msg);
           }
         }
@@ -442,6 +480,16 @@ export class Swarm {
     this.stats.regimeCounts = regimeCounts;
     this.stats.roleCounts = roleCounts;
 
+    // Fleet flight telemetry aggregation
+    let totalFleetDist = 0;
+    let sumFleetSpeed = 0;
+    for (const d of this.drones) {
+      totalFleetDist += d.totalDistance || 0;
+      sumFleetSpeed += d.currentSpeed || 0;
+    }
+    this.stats.fleetAvgSpeed = n > 0 ? (sumFleetSpeed / n) : 0;
+    this.stats.fleetTotalDistance = totalFleetDist;
+
     // Multi-modal sensor channel status (across the swarm)
     const survivorDrones = this.zonePresence.SURVIVOR ? this.zonePresence.SURVIVOR.count : 0;
     const survivorConf = this.zonePresence.SURVIVOR ? this.zonePresence.SURVIVOR.avgConfidence : 0;
@@ -477,7 +525,8 @@ export class Swarm {
     this.stats.clusterCertainty = certainty;
 
     // Update individual survivor target scores and attention tracking
-    let highestConf = -1;
+    // Update individual survivor target scores and attention tracking
+    let highestConf = 0.20; // Require minimum 20% discovery confidence before setting active focus
     let activeTarget = null;
 
     for (const st of this.survivorTargets) {
@@ -491,22 +540,23 @@ export class Swarm {
       } else {
         const distToDrones = this.drones.map(d => Math.hypot(d.col - st.col, d.row - st.row));
         const minDist = distToDrones.length > 0 ? Math.min(...distToDrones) : 999;
-        const localDrones = distToDrones.filter(d => d <= 3.5).length;
-        const cellUnique = this.field.getUniqueDroneCount(st.col, st.row);
-        const cellStrength = this.field.getStrength(st.col, st.row);
+        const localDrones = distToDrones.filter(d => d <= 3.8).length;
+        const cellUnique = Math.max(this.field.getLocalUniqueDroneCount(st.col, st.row, 1), localDrones);
+        const cellStrength = this.field.getLocalMaxStrength(st.col, st.row, 1);
 
-        let targetConf = 0.04;
-        if (localDrones >= 1 || cellUnique >= 1) {
-          targetConf = Math.min(0.98, cellStrength * 0.45 + localDrones * 0.14 + cellUnique * 0.12);
+        let targetConf = 0.0;
+        if (localDrones >= 1 || cellUnique >= 1 || cellStrength > 0.15) {
+          const proximityBonus = minDist <= 2.0 ? 0.20 : minDist <= 3.8 ? 0.10 : 0.0;
+          targetConf = Math.min(0.98, cellStrength * 0.40 + localDrones * 0.18 + cellUnique * 0.14 + proximityBonus);
         } else {
-          targetConf = Math.min(0.18, cellStrength * 0.35);
+          targetConf = 0.0;
         }
         st.confidence = targetConf;
 
-        if (targetConf >= 0.65 || (localDrones >= 2 && cellUnique >= 2)) {
+        if (targetConf >= 0.60 || (localDrones >= 2 && minDist <= 3.0)) {
           st.status = 'RESCUE_DISPATCH';
           st.solidifyTicks = (st.solidifyTicks || 0) + 1;
-        } else if (targetConf >= 0.20 || minDist <= 4.0) {
+        } else if (targetConf >= 0.20 || minDist <= 4.5) {
           st.status = 'CONVERGING';
           st.solidifyTicks = 0;
         } else {
@@ -515,8 +565,8 @@ export class Swarm {
         }
 
         // PER-TARGET RESCUE EXTRACTION:
-        // When sustained rescue lock is achieved for this survivor (>= 30 ticks of rescue dispatch):
-        if (st.solidifyTicks >= 30) {
+        // When sustained rescue lock is achieved for this survivor (>= 18 ticks of rescue dispatch):
+        if (st.solidifyTicks >= 18) {
           if (!this.rescuedCells.has(cellKey) && !this.isSurvivorExtracted(st.col, st.row)) {
             this.rescuedCells.add(cellKey);
             st.status = 'EXTRACTED';

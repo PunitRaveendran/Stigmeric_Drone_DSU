@@ -118,7 +118,68 @@ export class DisasterScenario {
       }
     }
 
-    if (name === 'disaster-zone' || name === 'ambiguous') {
+    if (name === 'catastrophe') {
+      // 12 SURVIVORS — Wide-Area Urban Mega Catastrophe
+      const targets = [
+        { id: 'ALPHA',   name: 'Survivor Alpha',   col: 16, row: 4,  sector: 'NE TOWER SECTOR' },
+        { id: 'BRAVO',   name: 'Survivor Bravo',   col: 5,  row: 13, sector: 'SW RUINS SECTOR' },
+        { id: 'CHARLIE', name: 'Survivor Charlie', col: 5,  row: 4,  sector: 'NW STRUCTURAL GAP' },
+        { id: 'DELTA',   name: 'Survivor Delta',   col: 16, row: 13, sector: 'SE VAULT SECTOR' },
+        { id: 'ECHO',    name: 'Survivor Echo',    col: 11, row: 8,  sector: 'CENTER CORRIDOR' },
+        { id: 'FOXTROT', name: 'Survivor Foxtrot', col: 11, row: 3,  sector: 'NORTH CONCOURSE' },
+        { id: 'GOLF',    name: 'Survivor Golf',    col: 3,  row: 8,  sector: 'WEST OVERPASS' },
+        { id: 'HOTEL',   name: 'Survivor Hotel',   col: 18, row: 8,  sector: 'EAST METRO TERMINAL' },
+        { id: 'INDIA',   name: 'Survivor India',   col: 8,  row: 6,  sector: 'NW COLLAPSED ATRIUM' },
+        { id: 'JULIET',  name: 'Survivor Juliet',  col: 14, row: 7,  sector: 'NE LOGISTICS HUB' },
+        { id: 'KILO',    name: 'Survivor Kilo',    col: 8,  row: 14, sector: 'SW RESIDENTIAL BLOCK' },
+        { id: 'LIMA',    name: 'Survivor Lima',    col: 18, row: 15, sector: 'SE SUBSTATION' },
+      ];
+
+      for (const t of targets) {
+        fillRect(grid, cols, CELL.SURVIVOR, t.col - 1, t.row - 1, t.col + 1, t.row + 1);
+        this.survivors.push(t);
+      }
+
+      // Decoys & Hazards
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 13, 10, 15, 12);
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 2, 2, 4, 3);
+      fillRect(grid, cols, CELL.WIND_NOISE, 1, 14, 3, 16);
+      fillRect(grid, cols, CELL.WIND_NOISE, 19, 2, 21, 4);
+      fillRect(grid, cols, CELL.HAZARD, 9, 1, 11, 2);
+
+      this.structures.push({ c0: 2, r0: 2, c1: 7, r1: 6, label: 'SECTOR W-1' });
+      this.structures.push({ c0: 14, r0: 2, c1: 19, r1: 6, label: 'SECTOR E-1' });
+      this.structures.push({ c0: 2, r0: 11, c1: 7, r1: 16, label: 'SECTOR W-2' });
+      this.structures.push({ c0: 14, r0: 11, c1: 19, r1: 16, label: 'SECTOR E-2' });
+
+    } else if (name === 'mass-casualty') {
+      // 8 SURVIVORS — Mass Casualty Emergency
+      const targets = [
+        { id: 'ALPHA',   name: 'Survivor Alpha',   col: 16, row: 4,  sector: 'NE TOWER SECTOR' },
+        { id: 'BRAVO',   name: 'Survivor Bravo',   col: 5,  row: 13, sector: 'SW RUINS SECTOR' },
+        { id: 'CHARLIE', name: 'Survivor Charlie', col: 5,  row: 4,  sector: 'NW STRUCTURAL GAP' },
+        { id: 'DELTA',   name: 'Survivor Delta',   col: 16, row: 13, sector: 'SE VAULT SECTOR' },
+        { id: 'ECHO',    name: 'Survivor Echo',    col: 11, row: 9,  sector: 'CENTER CORRIDOR' },
+        { id: 'FOXTROT', name: 'Survivor Foxtrot', col: 11, row: 3,  sector: 'NORTH CONCOURSE' },
+        { id: 'GOLF',    name: 'Survivor Golf',    col: 3,  row: 8,  sector: 'WEST OVERPASS' },
+        { id: 'HOTEL',   name: 'Survivor Hotel',   col: 18, row: 8,  sector: 'EAST COMMERCIAL' },
+      ];
+
+      for (const t of targets) {
+        fillRect(grid, cols, CELL.SURVIVOR, t.col - 1, t.row - 1, t.col + 1, t.row + 1);
+        this.survivors.push(t);
+      }
+
+      fillRect(grid, cols, CELL.HOT_DEBRIS, 14, 11, 18, 15);
+      fillRect(grid, cols, CELL.WIND_NOISE, 2, 8, 5, 10);
+      fillRect(grid, cols, CELL.HAZARD, 9, 2, 11, 4);
+
+      this.structures.push({ c0: 2, r0: 2, c1: 7, r1: 6, label: 'SECTOR W-1' });
+      this.structures.push({ c0: 14, r0: 2, c1: 19, r1: 6, label: 'SECTOR E-1' });
+      this.structures.push({ c0: 2, r0: 11, c1: 7, r1: 16, label: 'SECTOR W-2' });
+      this.structures.push({ c0: 14, r0: 11, c1: 19, r1: 16, label: 'SECTOR E-2' });
+
+    } else if (name === 'disaster-zone' || name === 'ambiguous') {
       // 5 DISTINCT SURVIVORS across the disaster zone!
       // 1. Survivor Alpha — Northeast Ruined Tower (Sector 16, 4)
       fillRect(grid, cols, CELL.SURVIVOR, 15, 3, 17, 5);
@@ -203,6 +264,6 @@ export class DisasterScenario {
    * Get available scenario names.
    */
   static getScenarioNames() {
-    return ['disaster-zone', 'simple', 'multi-survivor'];
+    return ['catastrophe', 'mass-casualty', 'disaster-zone', 'multi-survivor', 'simple'];
   }
 }
