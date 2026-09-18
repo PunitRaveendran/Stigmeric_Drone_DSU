@@ -9,6 +9,7 @@
  */
 
 import { Drone } from './drone.js';
+import { getLinkQuality, shouldDeliver, getAvgLinkQuality, RADIO_RANGE } from './comms.js';
 
 export class Swarm {
   /**
@@ -19,6 +20,7 @@ export class Swarm {
   constructor(field, sensors, opts = {}) {
     this.field = field;
     this.sensors = sensors;
+    this.scenario = sensors.scenario; // Cached for comms ray-cast occlusion
 
     this.drones = [];
     this.tick = 0;
@@ -31,6 +33,8 @@ export class Swarm {
       regimeCounts: { SPREAD: 0, CONVERGE: 0, SOLIDIFY: 0 },
       roleCounts: { SCOUT: 0, RELAY: 0, SENTINEL: 0 },
       dominantRegime: 'SPREAD',
+      // Self-Healing Comms Stats
+      commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
     };
 
     // Zone presence — how many drones are currently in each zone type
@@ -59,6 +63,10 @@ export class Swarm {
     this.missionScore = 0;
     this.survivorsExtracted = 0;
     this.survivorTargets = this.sensors.scenario.survivors.map(s => ({ ...s, status: 'SEARCHING', confidence: 0 }));
+
+    // NOOA Multi-Agent Tactical Negotiation State (Non-blocking & Deduplicated)
+    this._activeNOOASectors = new Set();
+    this._nooaInFlightCount = 0;
   }
 
   /**
@@ -145,7 +153,10 @@ export class Swarm {
       regimeCounts: { SPREAD: 0, CONVERGE: 0, SOLIDIFY: 0 },
       roleCounts: { SCOUT: 0, RELAY: 0, SENTINEL: 0 },
       dominantRegime: 'SPREAD',
+      commsStats: { degradedCount: 0, avgLinkQuality: 1.0, messagesDropped: 0 },
     };
+    this._activeNOOASectors.clear();
+    this._nooaInFlightCount = 0;
     this.field.reset();
   }
 
@@ -191,8 +202,7 @@ export class Swarm {
     };
 
     // ═══ DUAL-AXIS AUTONOMY: Mesh Topology & Role Determination ══════════════
-    // Evaluate RF mesh neighborhood per drone (RADIO_RANGE = 6.0 units)
-    const RADIO_RANGE = 6.0;
+    // Evaluate RF mesh neighborhood per drone (using comms link quality model)
     const meshTopology = new Map();
     for (const d of this.drones) {
       const neighbors = [];
@@ -221,6 +231,24 @@ export class Swarm {
         isBridge,
         swarmSize: this.drones.length,
       });
+    }
+
+    // ═══ SELF-HEALING COMMS: Per-Drone Link Quality & Mode Transition ═════════
+    let commsLinkSum = 0;
+    let commsDegradedCount = 0;
+    for (const drone of this.drones) {
+      const avgLQ = getAvgLinkQuality(drone, this.drones, this.scenario);
+      const result = drone.updateCommsMode(avgLQ);
+      commsLinkSum += avgLQ;
+      if (drone.decisionMode === 'STIGMERGIC') commsDegradedCount++;
+
+      if (result.changed) {
+        if (result.newMode === 'STIGMERGIC') {
+          this._addEvent('📵', `Drone #${drone.id} entered STIGMERGIC mode (link quality ${avgLQ.toFixed(2)} — rubble occlusion/distance). Falling back to pheromone-only navigation.`);
+        } else {
+          this._addEvent('📶', `Drone #${drone.id} restored FULL comms (link quality ${avgLQ.toFixed(2)}). Radio debate & NOOA negotiation re-enabled.`);
+        }
+      }
     }
 
     for (const drone of this.drones) {
@@ -326,6 +354,7 @@ export class Swarm {
     // Each drone's outbox messages are delivered to nearby drones' inboxes
     // based on radio range (6 grid units). No drone reads another's internal state.
     if (!this._debateLogThrottle) this._debateLogThrottle = new Set();
+    let tickDropped = 0;  // Self-healing: count messages lost to packet loss this tick
 
     for (const sender of this.drones) {
       if (sender.outbox.length === 0) continue;
@@ -334,12 +363,19 @@ export class Swarm {
         // Deliver to all drones within radio range
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
-          const dist = Math.hypot(receiver.x - sender.x, receiver.y - sender.y);
-          if (dist <= RADIO_RANGE) {
+          // Self-healing: probabilistic link quality gate replaces hard distance check
+          const linkQ = getLinkQuality(sender, receiver, this.scenario);
+          if (!shouldDeliver(linkQ)) {
+            tickDropped++;
+            continue;
+          }
+          // Delivered — push to receiver inbox
+          {
             receiver.inbox.push(msg);
 
-            // If this is a CANDIDATE_PROPOSAL and receiver is close, auto-request vote
-            if (msg.type === 'CANDIDATE_PROPOSAL' && dist <= 3.5) {
+            if (msg.type === 'CANDIDATE_PROPOSAL') {
+              const dist = Math.hypot(receiver.x - sender.x, receiver.y - sender.y);
+              if (dist <= 3.5) {
               receiver.inbox.push({
                 type: 'VOTE_REQUEST',
                 fromId: sender.id,
@@ -350,6 +386,7 @@ export class Swarm {
               });
             }
           }
+          }
         }
 
         // Log debate events to visible event feed (throttled to avoid spam)
@@ -359,13 +396,24 @@ export class Swarm {
           // Clear throttle every 60 ticks so events can repeat
           if (this.tick % 60 === 0) this._debateLogThrottle.clear();
 
-          if (msg.type === 'CANDIDATE_PROPOSAL' && msg.confidence >= 0.35) {
+          if (msg.type === 'CANDIDATE_PROPOSAL' && msg.confidence >= 0.40) {
             this._addEvent('📢', `Agent ${msg.callsign} → ALL: "I'm reading ${(msg.confidence * 100).toFixed(0)}% tri-modal signal at (${msg.col},${msg.row}). Requesting verification from nearby agents."`);
+            // Sparse NOOA Negotiation Gate (Ambiguous Band: 0.40 <= C < 0.75)
+            if (msg.confidence < 0.75) {
+              this._dispatchNOOANegotiation(sender, msg.col, msg.row, msg.confidence);
+            }
           }
         }
       }
       sender.outbox = []; // clear after routing
     }
+
+    // Update comms stats for this tick
+    this.stats.commsStats = {
+      degradedCount: commsDegradedCount,
+      avgLinkQuality: this.drones.length > 0 ? commsLinkSum / this.drones.length : 1.0,
+      messagesDropped: tickDropped,
+    };
 
     // Process all received messages (each agent independently evaluates)
     for (const drone of this.drones) {
@@ -379,8 +427,8 @@ export class Swarm {
         // Route vote responses back to nearby drones (especially the sentinel)
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
-          const dist = Math.hypot(receiver.x - sender.x, receiver.y - sender.y);
-          if (dist <= RADIO_RANGE) {
+          const linkQ = getLinkQuality(sender, receiver, this.scenario);
+          if (shouldDeliver(linkQ)) {
             receiver.inbox.push(msg);
           }
         }
@@ -431,6 +479,16 @@ export class Swarm {
     this.stats.avgUncertainty = sumU / n;
     this.stats.regimeCounts = regimeCounts;
     this.stats.roleCounts = roleCounts;
+
+    // Fleet flight telemetry aggregation
+    let totalFleetDist = 0;
+    let sumFleetSpeed = 0;
+    for (const d of this.drones) {
+      totalFleetDist += d.totalDistance || 0;
+      sumFleetSpeed += d.currentSpeed || 0;
+    }
+    this.stats.fleetAvgSpeed = n > 0 ? (sumFleetSpeed / n) : 0;
+    this.stats.fleetTotalDistance = totalFleetDist;
 
     // Multi-modal sensor channel status (across the swarm)
     const survivorDrones = this.zonePresence.SURVIVOR ? this.zonePresence.SURVIVOR.count : 0;
@@ -672,7 +730,74 @@ export class Swarm {
     if (this.eventLog.length > this._maxEvents) this.eventLog.pop();
   }
 
-      stepN(n) {
-        for (let i = 0; i < n; i++) this.step();
-      }
-    }
+  /**
+   * Asynchronous NOOA Multi-Agent Tactical Negotiation Dispatch
+   * - Deterministic Cluster Lead: Lowest Drone ID in 6.0-unit local bubble
+   * - Non-blocking: Fire-and-forget fetch with 400ms abort controller timeout
+   * - In-flight Concurrency Cap: Max 2 concurrent requests fleet-wide
+   * - Safe Fallback: Drops silently to existing deterministic voting on error/timeout
+   */
+  _dispatchNOOANegotiation(proposer, col, row, candidateConf) {
+    if (this._nooaInFlightCount >= 2) return;
+    const sectorKey = `${col},${row}`;
+    if (this._activeNOOASectors && this._activeNOOASectors.has(sectorKey)) return;
+
+    // Deterministic Cluster Lead Election: lowest drone ID in radio bubble
+    const localPeers = this.drones.filter(d => Math.hypot(d.x - (col + 0.5), d.y - (row + 0.5)) <= 6.0);
+    if (localPeers.length === 0) return;
+    const leadDrone = localPeers.reduce((min, d) => d.id < min.id ? d : min, localPeers[0]);
+
+    // Only the deterministically elected cluster lead dispatches the request
+    if (proposer.id !== leadDrone.id) return;
+
+    if (!this._activeNOOASectors) this._activeNOOASectors = new Set();
+    this._activeNOOASectors.add(sectorKey);
+    this._nooaInFlightCount = (this._nooaInFlightCount || 0) + 1;
+
+    const peerAngles = localPeers.map(p => p.heading);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 400); // 400ms safety timeout
+
+    const payload = {
+      agent_id: proposer.id,
+      callsign: proposer.callsign,
+      sector: `(${col}, ${row})`,
+      confidence: candidateConf,
+      readings: proposer.lastReadings,
+      peer_angles: peerAngles,
+    };
+
+    fetch('/api/nooa/negotiate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+      .then(res => res.json())
+      .then(data => {
+        clearTimeout(timeoutId);
+        this._nooaInFlightCount = Math.max(0, this._nooaInFlightCount - 1);
+        setTimeout(() => this._activeNOOASectors.delete(sectorKey), 3000); // 3s cooldown
+
+        if (data && data.is_valid && data.decision) {
+          if (data.decision === 'CONFIRM') {
+            this._addEvent('🤖', `[NOOA NEGOTIATOR] ${data.reasoning}`);
+            this.field.deposit(col, row, 0.40, proposer.id, data.confidence, 0.05);
+          } else if (data.decision === 'REJECT') {
+            this._addEvent('🙅', `[NOOA NEGOTIATOR] ${data.reasoning}`);
+            this.field.clearLocalAttraction(col, row, 3.0, false);
+          }
+        }
+      })
+      .catch(() => {
+        clearTimeout(timeoutId);
+        this._nooaInFlightCount = Math.max(0, this._nooaInFlightCount - 1);
+        this._activeNOOASectors.delete(sectorKey);
+        // Silent deterministic fallback: existing swarm peer debate handles it
+      });
+  }
+
+  stepN(n) {
+    for (let i = 0; i < n; i++) this.step();
+  }
+}

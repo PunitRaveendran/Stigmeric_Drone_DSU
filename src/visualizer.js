@@ -74,6 +74,7 @@ export class Visualizer {
     }; // default: agent communication display boxes ON
 
     this.hoveredDrone = null;
+    this.selectedDroneId = null;
     this._mouseCssX   = -9999;
     this._mouseCssY   = -9999;
 
@@ -238,9 +239,10 @@ export class Visualizer {
     // ── 8. Survivor-found pulse effects ──────────────────────────────────
     this._drawPulseEffects(ctx);
 
-    // ── 8.5. Interactive Drone Hover Telemetry HUD ───────────────────────
-    if (this.hoveredDrone) {
-      this._drawDroneTelemetryHUD(ctx, this.hoveredDrone, cs, ox, oy, alpha);
+    // ── 8.5. Interactive Drone Hover/Selected Telemetry HUD ─────────────
+    const targetDrone = this.hoveredDrone || (this.selectedDroneId !== null && this.swarm ? this.swarm.drones.find(d => d.id === this.selectedDroneId) : null);
+    if (targetDrone) {
+      this._drawDroneTelemetryHUD(ctx, targetDrone, cs, ox, oy, alpha);
     }
 
     // ── 9. Status banner ─────────────────────────────────────────────────
@@ -1053,6 +1055,27 @@ export class Visualizer {
     const r  = Math.max(cs * 0.28, 5);
 
     // Dynamic Role Indicators (Orthogonal to Regime)
+
+    // Self-Healing Comms: STIGMERGIC mode amber warning ring
+    if (drone.decisionMode === 'STIGMERGIC') {
+      ctx.save();
+      const stigPulse = 0.5 + 0.5 * Math.sin(jt * 5.0 + drone.id * 1.3);
+      ctx.strokeStyle = '#ff9500';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      ctx.globalAlpha = 0.5 + 0.4 * stigPulse;
+      ctx.beginPath();
+      ctx.arc(px, py, r * (2.0 + 0.4 * stigPulse), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = `700 ${Math.max(7, cs * 0.24)}px 'Space Mono', monospace`;
+      ctx.fillStyle = '#ff9500';
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText('\uD83D\uDCF5 STIGMERGIC', px, py - r * 2.5);
+      ctx.restore();
+    }
+
     if (drone.role === 'RELAY') {
       ctx.save();
       const pulseRelay = 0.5 + 0.5 * Math.sin(jt * 3.0 + drone.id);
@@ -1067,7 +1090,7 @@ export class Visualizer {
       ctx.font = `700 ${Math.max(8, cs * 0.28)}px 'Space Mono', monospace`;
       ctx.fillStyle = '#00f0ff';
       ctx.textAlign = 'center';
-      ctx.fillText('📡 RELAY', px, py - r * 2.0);
+      ctx.fillText('\uD83D\uDCE1 RELAY', px, py - r * 2.0);
       ctx.restore();
     } else if (drone.role === 'SENTINEL') {
       ctx.save();
@@ -1079,7 +1102,7 @@ export class Visualizer {
       ctx.font = `700 ${Math.max(8, cs * 0.28)}px 'Space Mono', monospace`;
       ctx.fillStyle = '#ff9e00';
       ctx.textAlign = 'center';
-      ctx.fillText('🔋 SENTINEL', px, py - r * 2.0);
+      ctx.fillText('\uD83D\uDD0B SENTINEL', px, py - r * 2.0);
       ctx.restore();
     } else if (drone.isSentinel) {
       // Legacy survivor lock beacon
@@ -1099,7 +1122,7 @@ export class Visualizer {
       ctx.font = `700 ${Math.max(9, cs * 0.35)}px 'Space Mono', monospace`;
       ctx.fillStyle = '#00ffaa';
       ctx.textAlign = 'center';
-      ctx.fillText('🎯 LOCK BEACON', px, py - r * 2.2);
+      ctx.fillText('\uD83C\uDFAF LOCK BEACON', px, py - r * 2.2);
       ctx.restore();
     }
 
@@ -1164,6 +1187,36 @@ export class Visualizer {
       ctx.fillStyle = 'rgba(180, 220, 255, 0.70)';
       ctx.textAlign = 'center';
       ctx.fillText(`${drone.altitude}m`, px, py + r * 1.95);
+    }
+
+    // Selected Drone Tactical Reticle Ring
+    if (this.selectedDroneId === drone.id) {
+      ctx.save();
+      const selPulse = 1 + 0.18 * Math.sin(jt * 6);
+      const ringR = r * 2.3 * selPulse;
+      ctx.strokeStyle = '#00ffff';
+      ctx.lineWidth = 2 * (this.dpr || 1);
+      ctx.shadowBlur = 14 * (this.dpr || 1);
+      ctx.shadowColor = '#00ffff';
+      ctx.beginPath();
+      ctx.arc(px, py, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Tactical bracket crosshairs
+      const brLen = ringR * 0.45;
+      ctx.beginPath();
+      ctx.moveTo(px - ringR - brLen, py); ctx.lineTo(px - ringR + 3, py);
+      ctx.moveTo(px + ringR - 3, py); ctx.lineTo(px + ringR + brLen, py);
+      ctx.moveTo(px, py - ringR - brLen); ctx.lineTo(px, py - ringR + 3);
+      ctx.moveTo(px, py + ringR - 3); ctx.lineTo(px, py + ringR + brLen);
+      ctx.stroke();
+
+      // Selected Tag
+      ctx.font = `700 ${Math.max(8.5, cs * 0.28)}px 'Space Mono', monospace`;
+      ctx.fillStyle = '#00ffff';
+      ctx.textAlign = 'center';
+      ctx.fillText('SELECTED', px, py - ringR - 6);
+      ctx.restore();
     }
 
     ctx.restore(); // undo outer save
@@ -1343,6 +1396,13 @@ export class Visualizer {
       },
     };
 
+    // Append comms health info to subtitle if any drones are in STIGMERGIC mode
+    const commsStats = this.swarm.stats.commsStats;
+    if (commsStats && commsStats.degradedCount > 0) {
+      const currentCfg = CONFIGS[regime] ?? CONFIGS.SPREAD;
+      currentCfg.lines[1] += ` · 📵 ${commsStats.degradedCount} drone${commsStats.degradedCount > 1 ? 's' : ''} in stigmergic fallback (avg LQ: ${commsStats.avgLinkQuality.toFixed(2)})`;
+    }
+
     const cfg = CONFIGS[regime] ?? CONFIGS.SPREAD;
     const dpr = this.dpr || 1;
 
@@ -1444,8 +1504,8 @@ export class Visualizer {
     ctx.stroke();
 
     // Floating Telemetry Card
-    const cardW = 194 * dpr;
-    const cardH = 92 * dpr;
+    const cardW = 216 * dpr;
+    const cardH = 138 * dpr;
     let cardX = px + r + 16 * dpr;
     let cardY = py - cardH / 2;
 
@@ -1471,8 +1531,8 @@ export class Visualizer {
     ctx.roundRect(cardX, cardY, cardW, cardH, 6 * dpr);
     ctx.fill();
 
-    ctx.strokeStyle = drone.isSentinel ? 'rgba(0,255,170,0.6)' : 'rgba(76,201,240,0.3)';
-    ctx.lineWidth = 1 * dpr;
+    ctx.strokeStyle = drone.isSentinel ? 'rgba(0,255,170,0.6)' : (this.selectedDroneId === drone.id ? '#00ffff' : 'rgba(76,201,240,0.3)');
+    ctx.lineWidth = (this.selectedDroneId === drone.id ? 1.5 : 1) * dpr;
     ctx.stroke();
 
     // Text Content
@@ -1480,10 +1540,11 @@ export class Visualizer {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    // Header
+    // Header with callsign
     ctx.font = `700 ${10 * dpr}px 'Space Mono', monospace`;
     ctx.fillStyle = hudColor;
-    ctx.fillText(`DRONE #${drone.id.toString().padStart(2, '0')} // TELEMETRY`, cardX + 10 * dpr, cardY + 8 * dpr);
+    const headerTag = drone.callsign ? `DRONE ${drone.callsign} [#${drone.id}]` : `DRONE #${drone.id.toString().padStart(2, '0')}`;
+    ctx.fillText(`${headerTag} // TELEMETRY`, cardX + 10 * dpr, cardY + 8 * dpr);
 
     // Dual-Axis: Role & Regime
     ctx.font = `600 ${9 * dpr}px 'Outfit', sans-serif`;
@@ -1494,27 +1555,75 @@ export class Visualizer {
     ctx.fillText(`${drone.role || 'SCOUT'}`, cardX + 44 * dpr, cardY + 23 * dpr);
 
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(`REGIME: ${drone.regime}`, cardX + 98 * dpr, cardY + 23 * dpr);
+    ctx.fillText(`REGIME: ${drone.regime}`, cardX + 106 * dpr, cardY + 23 * dpr);
 
     // Telemetry Stats
     ctx.font = `400 ${8.5 * dpr}px 'Space Mono', monospace`;
     ctx.fillStyle = 'rgba(200,225,255,0.7)';
     const battColor = drone.battery > 50 ? '#3ddc68' : drone.battery > 20 ? '#ffd60a' : '#ff4d6d';
-    ctx.fillText(`BATTERY:`, cardX + 10 * dpr, cardY + 41 * dpr);
+    ctx.fillText(`BATTERY:`, cardX + 10 * dpr, cardY + 38 * dpr);
     ctx.fillStyle = battColor;
-    ctx.fillText(`${drone.battery}% 🔋`, cardX + 64 * dpr, cardY + 41 * dpr);
+    ctx.fillText(`${drone.battery}% 🔋`, cardX + 64 * dpr, cardY + 38 * dpr);
 
     ctx.fillStyle = 'rgba(200,225,255,0.7)';
-    ctx.fillText(`SECTOR : (${drone.col}, ${drone.row})`, cardX + 10 * dpr, cardY + 55 * dpr);
+    ctx.fillText(`ALT: ${drone.altitude || 25}m`, cardX + 126 * dpr, cardY + 38 * dpr);
+
+    // Exact Coordinates & Sector
+    ctx.fillStyle = 'rgba(200,225,255,0.7)';
+    ctx.fillText(`POS   : (${drone.x.toFixed(1)}, ${drone.y.toFixed(1)}) · SEC: (${drone.col}, ${drone.row})`, cardX + 10 * dpr, cardY + 52 * dpr);
+
+    // Real-Time Speed & Distance
+    const spdMps = (drone.currentSpeed || 0).toFixed(1);
+    const spdKmh = ((drone.currentSpeed || 0) * 3.6).toFixed(0);
+    ctx.fillText(`SPEED : ${spdMps} m/s (${spdKmh} km/h)`, cardX + 10 * dpr, cardY + 66 * dpr);
+
+    const distM = (drone.totalDistance || 0).toFixed(0);
+    const baseM = (drone.distanceToBase || 0).toFixed(0);
+    ctx.fillText(`DIST  : ${distM}m · BASE: ${baseM}m`, cardX + 10 * dpr, cardY + 80 * dpr);
 
     // Sensors
     const tVal = (drone.lastReadings?.thermal || 0).toFixed(2);
     const aVal = (drone.lastReadings?.audio || 0).toFixed(2);
     const gVal = (drone.lastReadings?.gas || 0).toFixed(2);
     ctx.fillStyle = 'rgba(160,190,240,0.6)';
-    ctx.fillText(`TH:${tVal} | AU:${aVal} | GS:${gVal}`, cardX + 10 * dpr, cardY + 69 * dpr);
+    ctx.fillText(`TH:${tVal} | AU:${aVal} | GS:${gVal}`, cardX + 10 * dpr, cardY + 94 * dpr);
+
+    // Self-Healing Comms: Link quality and decision mode
+    const lqVal = (drone.linkQualityAvg || 0).toFixed(2);
+    const modeLabel = drone.decisionMode === 'STIGMERGIC' ? 'STIGMERGIC' : 'FULL';
+    const modeColor = drone.decisionMode === 'STIGMERGIC' ? '#ff9500' : '#3ddc68';
+    ctx.fillStyle = 'rgba(200,225,255,0.7)';
+    ctx.fillText(`COMMS :`, cardX + 10 * dpr, cardY + 108 * dpr);
+    ctx.fillStyle = modeColor;
+    ctx.fillText(`${modeLabel} (LQ: ${lqVal})`, cardX + 55 * dpr, cardY + 108 * dpr);
 
     ctx.restore();
+  }
+
+  /**
+   * Find closest drone to a CSS pixel click position within maxDistPx.
+   * @param {number} cssX
+   * @param {number} cssY
+   * @param {number} maxDistPx
+   * @returns {import('./drone.js').Drone|null}
+   */
+  getDroneAtCss(cssX, cssY, maxDistPx = 24) {
+    const l = this._getLayout();
+    if (!l || !this.swarm || !this.swarm.drones) return null;
+    const px  = cssX * this.dpr;
+    const py  = cssY * this.dpr;
+    let closest = null;
+    let minDist = maxDistPx * this.dpr;
+    for (const drone of this.swarm.drones) {
+      const dx = l.ox + drone.x * l.cs - px;
+      const dy = l.oy + drone.y * l.cs - py;
+      const dist = Math.hypot(dx, dy);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = drone;
+      }
+    }
+    return closest;
   }
 
   /**
