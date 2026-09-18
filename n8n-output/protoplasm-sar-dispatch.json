@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Triage & Paramedic Unit Assignment Engine\nconst payload = $input.first().json.body || $input.first().json;\n\nconst confidence = payload.triage?.fused_confidence || 0.90;\nconst location = payload.location || { sector: '(0,0)', simulated_lat: 12.9716, simulated_lon: 77.5946 };\nconst victimName = payload.triage?.victim_name || 'SURVIVOR';\nconst readings = payload.sensor_corroboration || {};\n\n// Calculate Triage Tier\nlet priority = 'CODE RED (CRITICAL)';\nlet etaMinutes = 4.5;\nif (confidence >= 0.85) {\n  priority = 'CODE RED (IMMEDIATE EXTRACTION)';\n  etaMinutes = 3.8;\n} else if (confidence >= 0.70) {\n  priority = 'CODE YELLOW (STABILIZE & SECURE)';\n  etaMinutes = 6.2;\n} else {\n  priority = 'CODE GREEN (MONITOR)';\n  etaMinutes = 10.0;\n}\n\n// Generate Emergency Dispatch Card\nconst alertCard = `🚨 *EMERGENCY SAR DISPATCH — PROTOPLASM SWARM*\\n` +\n  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n` +\n  `🎯 *Victim:* ${victimName}\\n` +\n  `📍 *Sector:* ${location.sector} (Lat: ${location.simulated_lat}, Lon: ${location.simulated_lon})\\n` +\n  `🩺 *Triage Tier:* ${priority}\\n` +\n  `🧠 *Fused AI Confidence:* ${(confidence * 100).toFixed(1)}%\\n` +\n  `📊 *Sensors:* YOLO Vision: ${(readings.yolo_vision * 100).toFixed(0)}% | Audio: ${(readings.yamnet_acoustic * 100).toFixed(0)}% | Thermal: ${(readings.passive_thermal * 100).toFixed(0)}%\\n` +\n  `🚑 *Assigned Ground Unit:* Mobile Rescue Unit ALPHA-01 (ETA: ${etaMinutes} mins)\\n` +\n  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;\n\nreturn [{\n  json: {\n    incident_id: payload.incident_id || `SAR-${Date.now()}`,\n    status: 'PARAMEDIC_DISPATCHED',\n    assigned_unit: 'MOBILE_RESCUE_ALPHA_01',\n    eta_minutes: etaMinutes,\n    triage_tier: priority,\n    alert_message: alertCard,\n    coordinates: location\n  }\n}];"
+        "jsCode": "const item = $input.first().json;\nconst payload = item.body ? item.body : item;\n\nconst confidence = (payload.triage && payload.triage.fused_confidence) ? payload.triage.fused_confidence : 0.90;\nconst location = payload.location || { sector: '(14, 22)', simulated_lat: 12.9716, simulated_lon: 77.5946 };\nconst victimName = (payload.triage && payload.triage.victim_name) ? payload.triage.victim_name : 'SURVIVOR';\nconst readings = payload.sensor_corroboration || {};\n\n// Calculate Triage Tier & ETA\nlet priority = 'CODE RED (CRITICAL)';\nlet etaMinutes = 4.5;\nif (confidence >= 0.85) {\n  priority = 'CODE RED (IMMEDIATE EXTRACTION)';\n  etaMinutes = 3.8;\n} else if (confidence >= 0.70) {\n  priority = 'CODE YELLOW (STABILIZE & SECURE)';\n  etaMinutes = 6.2;\n} else {\n  priority = 'CODE GREEN (MONITOR)';\n  etaMinutes = 10.0;\n}\n\nreturn [{\n  json: {\n    status: 'PARAMEDIC_DISPATCHED',\n    incident_id: payload.incident_id || `SAR-${Date.now()}`,\n    assigned_unit: 'MOBILE_RESCUE_ALPHA_01',\n    eta_minutes: etaMinutes,\n    triage_tier: priority,\n    alert_dispatched: true,\n    coordinates: location\n  }\n}];"
       },
       "name": "Triage & Routing Engine",
       "type": "n8n-nodes-base.code",
@@ -32,8 +32,7 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"status\": $json.status,\n  \"incident_id\": $json.incident_id,\n  \"assigned_unit\": $json.assigned_unit,\n  \"eta_minutes\": $json.eta_minutes,\n  \"triage_tier\": $json.triage_tier,\n  \"alert_dispatched\": true\n}",
+        "respondWith": "firstIncomingItem",
         "options": {}
       },
       "name": "Respond to Swarm",
@@ -70,7 +69,7 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   }
