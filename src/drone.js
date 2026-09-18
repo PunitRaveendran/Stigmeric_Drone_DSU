@@ -31,36 +31,36 @@ const REGIME_PARAMS = {
   SPREAD: {
     gradientPull:  0.05,   // Very weak attraction to prevent gravity wells at spawn
     randomWeight:  0.80,   // active random walk for wide sector coverage
-    speed:         0.48,   // fast sweep speed
+    speed:         0.28,   // nominal search speed (~10 m/s)
     depositAmount: 0.03,   // light trail — visible exploration path
-    stepScale:     0.26,   // smooth continuous step
+    stepScale:     0.11,   // real-world calibrated step scale
     turnRate:      0.05,   // exploration turns
     inertia:       0.55,   // smooth directional persistence
   },
   CONVERGE: {
     gradientPull:  0.80,   // strong attraction toward survivor signal center
     randomWeight:  0.20,   // focused movement toward target
-    speed:         0.35,   // slowing down as swarm re-verifies
+    speed:         0.20,   // slowing down as swarm re-verifies
     depositAmount: 0.12,   // heavy trail reinforcement
-    stepScale:     0.22,
+    stepScale:     0.09,
     turnRate:      0.03,
     inertia:       0.72,
   },
   SOLIDIFY: {
     gradientPull:  0.95,   // lock onto survivor center
     randomWeight:  0.05,   // minimal wander — swarm holds position
-    speed:         0.18,   // slow hover over target
+    speed:         0.12,   // slow hover over target
     depositAmount: 0.20,   // intense trail lock
-    stepScale:     0.15,
+    stepScale:     0.07,
     turnRate:      0.01,
     inertia:       0.85,
   },
   RESCUED: {
     gradientPull:  0.0,
     randomWeight:  0.0,
-    speed:         0.45,
+    speed:         0.32,   // transit RTL speed
     depositAmount: 0.0,   // no pheromone deposit during RTL flight
-    stepScale:     0.25,
+    stepScale:     0.13,
     turnRate:      0.02,
     inertia:       0.80,
   },

@@ -51,8 +51,8 @@
 
     <div class="toolbar-group">
       <span class="control-label">Speed</span>
-      <input type="range" id="speed-slider" min="1" max="12" value="3" step="1" />
-      <span id="speed-label" class="control-label" style="min-width:24px">3×</span>
+      <input type="range" id="speed-slider" min="1" max="12" value="1" step="1" />
+      <span id="speed-label" class="control-label" style="min-width:24px">1×</span>
     </div>
 
     <div class="sep"></div>
@@ -261,7 +261,7 @@ const GRID_ROWS = 18;
 
 let field, scenario, sensors, swarm, visualizer;
 let isRunning = false;
-let simSpeed  = 3;
+let simSpeed  = 1;
 let rafHandle = null;
 let _displayedCertainty = 0;
 let _lastEventCount     = 0;
