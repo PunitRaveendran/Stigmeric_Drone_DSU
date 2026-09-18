@@ -16,5 +16,13 @@
       "Sentinel": 0.011,
       "default": 0.022
     }
+  },
+  "thermal": {
+    "k_debris": 0.045,
+    "k_biological": 0.001,
+    "T_ambient": 0.15,
+    "cooling_half_life_ticks": 75,
+    "persistence_threshold": 0.65,
+    "description": "Newtonian Thermal Cooling & Homeostatic Biological PINN"
   }
 }

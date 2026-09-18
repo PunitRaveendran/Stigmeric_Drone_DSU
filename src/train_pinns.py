@@ -148,6 +148,56 @@ def train_battery(epochs=2500, n_collocation=3000, lr=1e-3):
     return model
 
 
+# ==================== Thermal Cooling PINN (Tier 2) ====================
+class ThermalPINN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # Inputs: t, T0, k, is_bio
+        self.net = MLP(in_dim=4, hidden=64, out_dim=1, layers=4)
+
+    def forward(self, t, T0, k, is_bio):
+        inp = torch.cat([t, T0, k, is_bio], dim=-1)
+        return torch.sigmoid(self.net(inp))
+
+
+def train_thermal(epochs=2500, n_collocation=3000, lr=1e-3):
+    print("\n=== Training Thermal Cooling PINN (Tier 2) ===")
+    model = ThermalPINN().to(DEVICE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    T_ambient = 0.15
+
+    for ep in range(epochs):
+        t = torch.rand(n_collocation, 1, device=DEVICE, requires_grad=True)
+        T0 = torch.rand(n_collocation, 1, device=DEVICE) * 0.5 + 0.5  # initial hot reading [0.5, 1.0]
+        k = torch.rand(n_collocation, 1, device=DEVICE) * 0.05 + 0.02  # cooling rate
+        is_bio = (torch.rand(n_collocation, 1, device=DEVICE) > 0.5).float()  # 1 for survivor, 0 for debris
+
+        T = model(t, T0, k, is_bio)
+        dT_dt = torch.autograd.grad(T, t, grad_outputs=torch.ones_like(T), create_graph=True)[0]
+
+        # Biological homeostatic maintenance maintains core temp, inanimate debris cools to ambient
+        q_metabolic = is_bio * (k * (T0 - T_ambient))
+        residual = dT_dt + k * (T - T_ambient) - q_metabolic
+        loss_ode = torch.mean(residual ** 2)
+
+        # Initial condition: at t=0, T = T0
+        t0 = torch.zeros_like(t)
+        loss_ic = torch.mean((model(t0, T0, k, is_bio) - T0) ** 2)
+
+        loss = loss_ode + 1.2 * loss_ic
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if (ep + 1) % 500 == 0:
+            print(f"  Epoch {ep+1:4d} | Loss {loss.item():.6f}")
+
+    path = OUTPUT_DIR / "pinn_thermal.pt"
+    torch.save(model.state_dict(), path)
+    print(f"Saved → {path}")
+    return model
+
+
 def export_calibration():
     calib = {
         "pheromone": {
@@ -163,6 +213,14 @@ def export_calibration():
                 "Sentinel": 0.011,
                 "default": 0.022
             }
+        },
+        "thermal": {
+            "k_debris": 0.045,
+            "k_biological": 0.001,
+            "T_ambient": 0.15,
+            "cooling_half_life_ticks": 75,
+            "persistence_threshold": 0.65,
+            "description": "Newtonian Thermal Cooling & Homeostatic Biological PINN"
         }
     }
     path = OUTPUT_DIR / "pinn_calibration.json"
@@ -176,5 +234,6 @@ if __name__ == "__main__":
     print("=" * 50)
     train_pheromone()
     train_battery()
+    train_thermal()
     export_calibration()
     print("\n✅ All files saved successfully.")

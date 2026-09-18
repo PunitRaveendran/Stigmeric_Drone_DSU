@@ -268,6 +268,7 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/nooa/negotiate':
             try:
                 from urllib.parse import parse_qs
+                import asyncio
                 try:
                     from src.nooa_agent import SARSwarmAgent, SensorReading
                 except ImportError:
@@ -330,6 +331,22 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
                 "approx_drain_per_tick": {
                     "Scout": 0.028, "Relay": 0.031, "Sentinel": 0.011, "default": 0.022
                 }
+            })
+            self.wfile.write(json.dumps(data, indent=2).encode())
+            return
+
+        if parsed.path == '/api/pinn/thermal':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            data = PINN_CALIB.get("thermal", {
+                "k_debris": 0.045,
+                "k_biological": 0.001,
+                "T_ambient": 0.15,
+                "cooling_half_life_ticks": 75,
+                "persistence_threshold": 0.65,
+                "description": "Newtonian Thermal Cooling & Homeostatic Biological PINN"
             })
             self.wfile.write(json.dumps(data, indent=2).encode())
             return
