@@ -306,19 +306,24 @@ class DualStackHTTPServer(HTTPServer):
             pass
         super().server_bind()
 
-print(f"\n🚀 Starting ML Inference API Server on http://127.0.0.1:8080 & http://localhost:8080")
-print(f"   API endpoint: http://127.0.0.1:8080/api/inference")
-print(f"   Frontend:     http://127.0.0.1:8080/index.html")
-print(f"\n   Press Ctrl+C to stop.\n")
-sys.stdout.flush()
+def run_server(port=8080):
+    print(f"\n🚀 Starting ML Inference API Server on http://127.0.0.1:{port} & http://localhost:{port}")
+    print(f"   API endpoint: http://127.0.0.1:{port}/api/inference")
+    print(f"   Frontend:     http://127.0.0.1:{port}/index.html")
+    print(f"\n   Press Ctrl+C to stop.\n")
+    sys.stdout.flush()
 
-try:
-    server = DualStackHTTPServer(('::', 8080), InferenceAPIHandler)
-except Exception:
-    server = HTTPServer(('0.0.0.0', 8080), InferenceAPIHandler)
+    try:
+        server = DualStackHTTPServer(('::', port), InferenceAPIHandler)
+    except Exception:
+        server = HTTPServer(('0.0.0.0', port), InferenceAPIHandler)
 
-try:
-    server.serve_forever()
-except KeyboardInterrupt:
-    print("\n🛑 Server stopped.")
-    server.server_close()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n🛑 Server stopped.")
+        server.server_close()
+
+if __name__ == '__main__':
+    run_server()
+
