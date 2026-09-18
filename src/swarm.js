@@ -10,6 +10,7 @@
 
 import { Drone } from './drone.js';
 import { getLinkQuality, shouldDeliver, getAvgLinkQuality, RADIO_RANGE } from './comms.js';
+import { beeceptor } from './beeceptor.js';
 
 export class Swarm {
   /**
@@ -727,9 +728,43 @@ export class Swarm {
         }
       }
 
+    // Periodic Beeceptor Cloud Telemetry & HIL Ingress Polling
+    if (this.tick % 60 === 0) {
+      beeceptor.logTelemetry({
+        activeDrones: this.drones.length,
+        mapExploredPct: this.stats.mapExploredPct,
+        survivorsExtracted: this.survivorsExtracted,
+        decoysRejected: this.stats.decoysRejected || 0,
+      });
+
+      beeceptor.checkHILOverride((override) => {
+        if (override.action === 'INJECT_HAZARD') {
+          const c = override.sector_col ?? 10;
+          const r = override.sector_row ?? 12;
+          this.field.deposit(c, r, 0.9, 'HIL_OVERRIDE', 0.1, 0.8);
+          this._addEvent('⚠️', `[BEECEPTOR HIL] External Hazard Injected at (${c}, ${r})! Swarm re-routing.`);
+        } else if (override.action === 'INJECT_DECOY') {
+          const c = override.sector_col ?? 8;
+          const r = override.sector_row ?? 8;
+          this._addEvent('🔥', `[BEECEPTOR HIL] External Thermal Decoy Injected at (${c}, ${r})! Verification active.`);
+        }
+      });
+    }
+
   _addEvent(icon, text) {
     this.eventLog.unshift({ tick: this.tick, icon, text });
     if (this.eventLog.length > this._maxEvents) this.eventLog.pop();
+
+    // Stream high-priority SAR Incidents to Beeceptor Cloud Proxy
+    if (icon === '🚨' || icon === '🏆' || icon === '🙅' || icon === '🤖' || icon === '🏛️') {
+      beeceptor.logIncident({
+        tick: this.tick,
+        icon,
+        summary: text,
+        active_drones: this.drones.length,
+        survivors_found: this.survivorsExtracted || 0,
+      });
+    }
   }
 
   /**
@@ -782,6 +817,16 @@ export class Swarm {
         setTimeout(() => this._activeNOOASectors.delete(sectorKey), 3000); // 3s cooldown
 
         if (data && data.is_valid && data.decision) {
+          beeceptor.logNOOADebate({
+            lead_agent: proposer.callsign,
+            sector: `(${col}, ${row})`,
+            decision: data.decision,
+            confidence: data.confidence,
+            channel_alignment: data.channel_alignment,
+            reasoning: data.reasoning,
+            peer_angles: peerAngles,
+          });
+
           if (data.decision === 'CONFIRM') {
             this._addEvent('🤖', `[NOOA NEGOTIATOR] ${data.reasoning}`);
             this.field.deposit(col, row, 0.40, proposer.id, data.confidence, 0.05);

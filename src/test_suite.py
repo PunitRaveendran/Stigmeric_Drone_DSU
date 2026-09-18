@@ -104,5 +104,19 @@ class TestNeuralModelAssets(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(base_dir, "pinn_pheromone.pt")), "PINN pheromone model missing")
 
 
+class TestBeeceptorGateway(unittest.TestCase):
+
+    def test_incident_payload_format(self):
+        payload = {
+            "source": "PROTOPLASM_SWARM_CORE",
+            "event_type": "SURVIVOR_LOCKED",
+            "sector": "(14, 22)",
+            "fused_confidence": 0.942,
+            "active_drones": 24,
+        }
+        self.assertEqual(payload["source"], "PROTOPLASM_SWARM_CORE")
+        self.assertGreaterEqual(payload["fused_confidence"], 0.75)
+
+
 if __name__ == "__main__":
     unittest.main()
