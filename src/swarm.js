@@ -477,7 +477,8 @@ export class Swarm {
     this.stats.clusterCertainty = certainty;
 
     // Update individual survivor target scores and attention tracking
-    let highestConf = -1;
+    // Update individual survivor target scores and attention tracking
+    let highestConf = 0.20; // Require minimum 20% discovery confidence before setting active focus
     let activeTarget = null;
 
     for (const st of this.survivorTargets) {
@@ -491,22 +492,23 @@ export class Swarm {
       } else {
         const distToDrones = this.drones.map(d => Math.hypot(d.col - st.col, d.row - st.row));
         const minDist = distToDrones.length > 0 ? Math.min(...distToDrones) : 999;
-        const localDrones = distToDrones.filter(d => d <= 3.5).length;
-        const cellUnique = this.field.getUniqueDroneCount(st.col, st.row);
-        const cellStrength = this.field.getStrength(st.col, st.row);
+        const localDrones = distToDrones.filter(d => d <= 3.8).length;
+        const cellUnique = Math.max(this.field.getLocalUniqueDroneCount(st.col, st.row, 1), localDrones);
+        const cellStrength = this.field.getLocalMaxStrength(st.col, st.row, 1);
 
-        let targetConf = 0.04;
-        if (localDrones >= 1 || cellUnique >= 1) {
-          targetConf = Math.min(0.98, cellStrength * 0.45 + localDrones * 0.14 + cellUnique * 0.12);
+        let targetConf = 0.0;
+        if (localDrones >= 1 || cellUnique >= 1 || cellStrength > 0.15) {
+          const proximityBonus = minDist <= 2.0 ? 0.20 : minDist <= 3.8 ? 0.10 : 0.0;
+          targetConf = Math.min(0.98, cellStrength * 0.40 + localDrones * 0.18 + cellUnique * 0.14 + proximityBonus);
         } else {
-          targetConf = Math.min(0.18, cellStrength * 0.35);
+          targetConf = 0.0;
         }
         st.confidence = targetConf;
 
-        if (targetConf >= 0.65 || (localDrones >= 2 && cellUnique >= 2)) {
+        if (targetConf >= 0.60 || (localDrones >= 2 && minDist <= 3.0)) {
           st.status = 'RESCUE_DISPATCH';
           st.solidifyTicks = (st.solidifyTicks || 0) + 1;
-        } else if (targetConf >= 0.20 || minDist <= 4.0) {
+        } else if (targetConf >= 0.20 || minDist <= 4.5) {
           st.status = 'CONVERGING';
           st.solidifyTicks = 0;
         } else {
@@ -515,8 +517,8 @@ export class Swarm {
         }
 
         // PER-TARGET RESCUE EXTRACTION:
-        // When sustained rescue lock is achieved for this survivor (>= 30 ticks of rescue dispatch):
-        if (st.solidifyTicks >= 30) {
+        // When sustained rescue lock is achieved for this survivor (>= 18 ticks of rescue dispatch):
+        if (st.solidifyTicks >= 18) {
           if (!this.rescuedCells.has(cellKey) && !this.isSurvivorExtracted(st.col, st.row)) {
             this.rescuedCells.add(cellKey);
             st.status = 'EXTRACTED';
