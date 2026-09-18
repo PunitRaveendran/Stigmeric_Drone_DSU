@@ -1643,6 +1643,79 @@ select:focus {
   transition: width 0.3s ease, background 0.3s ease;
 }
 
+/* ─── n8n Emergency Dispatch Toast ─────────────────────────────────────── */
+.n8n-dispatch-toast {
+  position: fixed;
+  top: 76px;
+  right: 320px;
+  width: 380px;
+  background: rgba(14, 18, 28, 0.95);
+  border: 1px solid rgba(255, 109, 90, 0.6);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(255, 109, 90, 0.25), 0 0 20px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(12px);
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(0);
+  opacity: 1;
+}
+.n8n-dispatch-toast.hidden {
+  opacity: 0;
+  transform: translateY(-20px);
+  pointer-events: none;
+}
+.toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font: 700 11px var(--font-mono);
+  color: #ff6d5a;
+  letter-spacing: 1px;
+  border-bottom: 1px solid rgba(255, 109, 90, 0.2);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--clr-text-faint);
+  font-size: 16px;
+  cursor: pointer;
+}
+.toast-close:hover { color: #fff; }
+.toast-body {
+  font: 400 12px var(--font-ui);
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.toast-badge {
+  display: inline-block;
+  background: rgba(255, 109, 90, 0.15);
+  color: #ff6d5a;
+  border: 1px solid rgba(255, 109, 90, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font: 700 10px var(--font-mono);
+  margin-bottom: 6px;
+}
+.toast-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+  font: 600 11px var(--font-mono);
+}
+.toast-link {
+  color: #38bdf8;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 11px;
+}
+.toast-link:hover { text-decoration: underline; }
+
 /* ─── Cyber-Physical Security & Byzantine Fault Tolerance ─────────────────── */
 .drone-card.rogue-card {
   border-color: #ff0055 !important;

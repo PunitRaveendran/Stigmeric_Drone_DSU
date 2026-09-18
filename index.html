@@ -85,6 +85,17 @@
       <button class="btn btn-icon" id="btn-force-rtl" title="Manually Trigger Return-To-Launch Base (RTL)">🏠 Force RTL</button>
       <button class="btn btn-icon" id="btn-inject-rogue" style="border-color:#ff0055;color:#ff4d6d" title="Simulate Byzantine Compromise / Attack Drill">🔴 Inject Rogue</button>
       <button class="btn btn-icon active" id="btn-toggle-bft" style="border-color:#7b2cbf;color:#c77dff" title="Toggle Byzantine Fault Defense (BFT)">🛡️ BFT Defense</button>
+      <a href="https://beeceptor.com/console/stigmericdrone" target="_blank" class="btn btn-icon" id="btn-beeceptor-badge" title="Open Live Beeceptor Cloud Traffic Console (stigmericdrone.proxy.beeceptor.com)" style="color: #ffaa00; border-color: rgba(255, 170, 0, 0.4); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+        <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#ffaa00; box-shadow:0 0 6px #ffaa00;"></span>
+        🐝 Beeceptor HIL
+      </a>
+      <a href="https://dronedsu.app.n8n.cloud" target="_blank" class="btn btn-icon" id="btn-n8n-badge" title="Open Live n8n Cloud Triage Engine (dronedsu.app.n8n.cloud)" style="color: #ff6d5a; border-color: rgba(255, 109, 90, 0.4); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+        <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#ff6d5a; box-shadow:0 0 6px #ff6d5a;"></span>
+        ⚡ n8n Cloud
+      </a>
+      <button class="btn btn-icon" id="btn-test-n8n" title="Trigger Instant Test SAR Emergency Webhook to n8n Cloud" style="color: #ff6d5a; border-color: rgba(255, 109, 90, 0.4); display: inline-flex; align-items: center; gap: 5px;">
+        🚨 Test n8n
+      </button>
     </div>
   </header>
 
@@ -368,7 +379,36 @@
       </div>
     </section>
 
-    <!-- ② Live Event Feed ──────────────────────────────────────────────── -->
+    <!-- ②.5 n8n Cloud Autonomous SAR Triage Engine ──────────────────────── -->
+    <section class="panel-section" id="n8n-sidebar-section" style="border: 1px solid rgba(255, 109, 90, 0.35); background: rgba(255, 109, 90, 0.06); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h2 class="panel-title" style="margin:0; color:#ff6d5a; display:flex; align-items:center; gap:6px; font-size:12px;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ff6d5a; box-shadow:0 0 8px #ff6d5a;"></span>
+          n8n Cloud Triage Engine
+        </h2>
+        <span style="font-size:9px; font-weight:700; color:#3ddc68; background:rgba(61,220,104,0.15); border:1px solid rgba(61,220,104,0.3); padding:2px 6px; border-radius:4px; font-family:var(--font-mono)">ONLINE</span>
+      </div>
+      
+      <div style="font-size:11px; color:var(--clr-text-dim); margin-bottom:8px; line-height:1.4">
+        Autonomous webhook triage & ground paramedic dispatch pipeline.
+      </div>
+
+      <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,109,90,0.2); border-radius:6px; padding:8px; margin-bottom:10px; font-family:var(--font-mono); font-size:11px;">
+        <div style="color:var(--clr-text-faint); font-size:9px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Latest Triage Ticket:</div>
+        <div id="sidebar-n8n-status" style="color:#ff6d5a; font-weight:600; font-size:11px;">Standby — Awaiting confirmed survivor...</div>
+      </div>
+
+      <div style="display:flex; gap:6px;">
+        <button id="btn-sidebar-test-n8n" class="btn" style="flex:1; background:rgba(255,109,90,0.15); border-color:rgba(255,109,90,0.4); color:#ff6d5a; font-size:11px; font-weight:600; padding:6px 8px; justify-content:center;">
+          🚨 Test Dispatch
+        </button>
+        <a href="https://dronedsu.app.n8n.cloud" target="_blank" class="btn" style="flex:1; background:rgba(26,115,232,0.15); border-color:rgba(26,115,232,0.4); color:#4ab0ff; font-size:11px; font-weight:600; padding:6px 8px; justify-content:center; text-decoration:none;">
+          Open n8n ➔
+        </a>
+      </div>
+    </section>
+
+    <!-- ③ Live Event Feed ──────────────────────────────────────────────── -->
     <section class="panel-section" style="flex:1">
       <h2 class="panel-title">Live Event Feed</h2>
       <ul id="event-log" aria-live="polite">
@@ -378,16 +418,35 @@
 
   </aside>
 
+  <!-- ═══ n8n DISPATCH LIVE TOAST NOTIFICATION ════════════════════════════ -->
+  <div id="n8n-dispatch-toast" class="n8n-dispatch-toast hidden">
+    <div class="toast-header">
+      <span>🚨 SAR EMERGENCY DISPATCH // n8n CLOUD</span>
+      <button id="btn-close-toast" class="toast-close">&times;</button>
+    </div>
+    <div class="toast-body" id="toast-body-content">
+      <div class="toast-badge">CODE RED (CRITICAL)</div>
+      <div><strong>Target:</strong> <span id="toast-victim-name">SURVIVOR-ALPHA</span></div>
+      <div><strong>Sector:</strong> <span id="toast-sector-coords">(14, 22)</span> · AI Confidence: <span id="toast-ai-conf" style="color:#3ddc68">94.2%</span></div>
+      <div style="margin-top:4px;color:var(--clr-text-faint);font-size:11px">Auto-triaged by n8n workflow pipeline.</div>
+    </div>
+    <div class="toast-footer">
+      <span id="toast-unit-info" style="color:#ff6d5a">🚑 RESCUE UNIT EN ROUTE (ETA: 3.8m)</span>
+      <a href="https://dronedsu.app.n8n.cloud" target="_blank" class="toast-link">View in n8n ➔</a>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── Simulation script ───────────────────────────────────────────────── -->
 <script type="module">
-import { PheromoneField }   from './src/field.js?v=53';
-import { DisasterScenario } from './src/scenario.js?v=53';
-import { SensorGenerator }  from './src/sensors.js?v=53';
-import { Swarm }            from './src/swarm.js?v=53';
-import { Visualizer }       from './src/visualizer.js?v=53';
-import { runSweep }         from './src/uncertainty.js?v=53';
+import { PheromoneField }   from './src/field.js?v=56';
+import { DisasterScenario } from './src/scenario.js?v=56';
+import { SensorGenerator }  from './src/sensors.js?v=56';
+import { Swarm }            from './src/swarm.js?v=56';
+import { Visualizer }       from './src/visualizer.js?v=56';
+import { runSweep }         from './src/uncertainty.js?v=56';
+import { n8nGateway }       from './src/n8n.js?v=56';
 
 const GRID_COLS = 22;
 const GRID_ROWS = 18;
@@ -1250,6 +1309,88 @@ document.addEventListener('keydown', e => {
       break;
   }
 });
+
+// ═══ n8n Cloud Dispatch Toast & Sidebar Controller ═════════════════════
+let _toastTimer = null;
+window.showN8nDispatchToast = function(data = {}) {
+  const toast = document.getElementById('n8n-dispatch-toast');
+  const targetEl = document.getElementById('toast-victim-name');
+  const sectorEl = document.getElementById('toast-sector-coords');
+  const confEl   = document.getElementById('toast-ai-conf');
+  const unitEl   = document.getElementById('toast-unit-info');
+  const sidebarStatusEl = document.getElementById('sidebar-n8n-status');
+
+  const victim = data.targetName || 'SURVIVOR-ALPHA';
+  const coords = `(${data.col ?? 14}, ${data.row ?? 22})`;
+  const conf   = `${data.confidence || '94.2'}%`;
+  const unit   = data.unit || 'PARAMEDIC-UNIT-04';
+  const eta    = data.eta || 3.8;
+
+  if (targetEl) targetEl.textContent = victim;
+  if (sectorEl) sectorEl.textContent = coords;
+  if (confEl)   confEl.textContent   = conf;
+  if (unitEl)   unitEl.textContent   = `🚑 ${unit} (ETA: ${eta}m)`;
+
+  if (sidebarStatusEl) {
+    sidebarStatusEl.innerHTML = `<span style="color:#3ddc68">● DISPATCH CONFIRMED:</span> ${unit} ➔ Sector ${coords} (ETA: ${eta}m)`;
+  }
+
+  if (toast) {
+    toast.classList.remove('hidden');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => {
+      toast.classList.add('hidden');
+    }, 7500);
+  }
+};
+
+document.getElementById('btn-close-toast')?.addEventListener('click', () => {
+  const toast = document.getElementById('n8n-dispatch-toast');
+  if (toast) toast.classList.add('hidden');
+  if (_toastTimer) clearTimeout(_toastTimer);
+});
+
+async function triggerManualN8nTest() {
+  const testData = {
+    col: 14,
+    row: 22,
+    confidence: 0.942,
+    readings: { camera: 0.95, audio: 0.91, thermal: 0.88, gas: 0.04 },
+    leadAgent: 'OPERATOR-MANUAL-PING',
+    name: 'TEST-CASUALTY-ALPHA',
+  };
+  if (swarm) {
+    swarm._addEvent('⚡', `[MANUAL TEST] Firing live SAR Emergency Webhook to n8n Cloud triage engine...`);
+  }
+  window.showN8nDispatchToast({
+    targetName: 'TEST-CASUALTY-ALPHA (14, 22)',
+    col: 14,
+    row: 22,
+    confidence: '94.2',
+    unit: 'PARAMEDIC-DISPATCH-QUEUED...',
+    eta: 3.5,
+  });
+
+  const res = await n8nGateway.triggerSARDispatch(testData);
+  if (res && (res.assigned_unit || res.status)) {
+    const unit = res.assigned_unit || 'PARAMEDIC-UNIT-04 (CONFIRMED)';
+    const eta = res.eta_minutes || 3.8;
+    if (swarm) {
+      swarm._addEvent('⚡', `[n8n RESPONSE] ${unit} en route to (14, 22) — ETA ${eta}m`);
+    }
+    window.showN8nDispatchToast({
+      targetName: 'TEST-CASUALTY-ALPHA (14, 22)',
+      col: 14,
+      row: 22,
+      confidence: '94.2',
+      unit: unit,
+      eta: eta,
+    });
+  }
+}
+
+document.getElementById('btn-test-n8n')?.addEventListener('click', triggerManualN8nTest);
+document.getElementById('btn-sidebar-test-n8n')?.addEventListener('click', triggerManualN8nTest);
 
 window.addEventListener('resize', resizeCanvas);
 

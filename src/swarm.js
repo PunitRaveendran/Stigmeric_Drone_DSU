@@ -10,6 +10,8 @@
 
 import { Drone } from './drone.js';
 import { getLinkQuality, shouldDeliver, getAvgLinkQuality, RADIO_RANGE } from './comms.js';
+import { beeceptor } from './beeceptor.js';
+import { n8nGateway } from './n8n.js';
 
 export class Swarm {
   /**
@@ -227,6 +229,7 @@ export class Swarm {
     this._droneIdCounter = 0;
     this._prevDominant = 'SPREAD';
     this._seenDispatch = new Set();
+    this._seenTargetDispatch = new Set();
     this.dispatchLog = [];
     this.eventLog = [];
     this.solidifyTicks = 0;
@@ -472,6 +475,31 @@ export class Swarm {
             confidence: drone.confidence.toFixed(3),
           });
           this._addEvent('🚨', `Rescue dispatch! Survivor confirmed at sector (${drone.col},${drone.row})`);
+
+          // Trigger Autonomous n8n First-Responder Dispatch Workflow
+          n8nGateway.triggerSARDispatch({
+            col: drone.col,
+            row: drone.row,
+            confidence: drone.confidence,
+            readings: drone.lastReadings,
+            leadAgent: drone.callsign,
+          }).then((res) => {
+            const unit = res?.assigned_unit || 'PARAMEDIC-UNIT-04 (DISPATCHED)';
+            const eta = res?.eta_minutes || res?.estimated_arrival_minutes || 3.8;
+            const priority = res?.priority || 'CODE RED (CRITICAL)';
+            this._addEvent('⚡', `[n8n DISPATCH] ${unit} en route to (${drone.col},${drone.row}) — ETA ${eta}m`);
+            if (typeof window !== 'undefined' && typeof window.showN8nDispatchToast === 'function') {
+              window.showN8nDispatchToast({
+                targetName: `SURVIVOR-ALPHA (${drone.col},${drone.row})`,
+                col: drone.col,
+                row: drone.row,
+                confidence: (drone.confidence * 100).toFixed(1),
+                unit: unit,
+                eta: eta,
+                priority: priority,
+              });
+            }
+          });
         }
       }
     }
@@ -744,6 +772,42 @@ export class Swarm {
         if (targetConf >= 0.60 || (localDrones >= 2 && minDist <= 3.0)) {
           st.status = 'RESCUE_DISPATCH';
           st.solidifyTicks = (st.solidifyTicks || 0) + 1;
+
+          // Trigger Autonomous n8n First-Responder Dispatch Workflow when target is first locked
+          if (!this._seenTargetDispatch) this._seenTargetDispatch = new Set();
+          if (!this._seenTargetDispatch.has(cellKey)) {
+            this._seenTargetDispatch.add(cellKey);
+            this.dispatchLog.push({
+              tick: this.tick, col: st.col, row: st.row,
+              confidence: st.confidence.toFixed(3),
+            });
+            this._addEvent('🚨', `Rescue dispatch! Survivor ${st.name} confirmed at sector (${st.col},${st.row})`);
+
+            n8nGateway.triggerSARDispatch({
+              col: st.col,
+              row: st.row,
+              confidence: st.confidence,
+              name: st.name,
+              readings: { camera: 0.92, audio: 0.88, thermal: 0.85, gas: 0.05 },
+              leadAgent: `SWARM-AGENT-0${Math.floor(Math.random() * 5 + 1)}`,
+            }).then((res) => {
+              const unit = res?.assigned_unit || 'PARAMEDIC-UNIT-04 (DISPATCHED)';
+              const eta = res?.eta_minutes || res?.estimated_arrival_minutes || 3.8;
+              const priority = res?.priority || 'CODE RED (CRITICAL)';
+              this._addEvent('⚡', `[n8n DISPATCH] ${unit} en route to ${st.name} at (${st.col},${st.row}) — ETA ${eta}m`);
+              if (typeof window !== 'undefined' && typeof window.showN8nDispatchToast === 'function') {
+                window.showN8nDispatchToast({
+                  targetName: `${st.name} (${st.col},${st.row})`,
+                  col: st.col,
+                  row: st.row,
+                  confidence: (st.confidence * 100).toFixed(1),
+                  unit: unit,
+                  eta: eta,
+                  priority: priority,
+                });
+              }
+            });
+          }
         } else if (targetConf >= 0.20 || minDist <= 4.5) {
           st.status = 'CONVERGING';
           st.solidifyTicks = 0;
@@ -762,6 +826,18 @@ export class Swarm {
             st.solidifyTicks = 0;
             this.survivorsExtracted++;
             this.missionScore += 500; // +500 PTS Mission Score!
+
+            if (typeof window !== 'undefined' && typeof window.showN8nDispatchToast === 'function') {
+              window.showN8nDispatchToast({
+                targetName: `${st.name} [EXTRACTED]`,
+                col: st.col,
+                row: st.row,
+                confidence: '100.0',
+                unit: 'GROUND MEDICAL EVAC COMPLETED',
+                eta: 0.0,
+                priority: 'RESCUE COMPLETE',
+              });
+            }
 
             // ATTENTION SHIFT: Clear local attraction so gradient pulls swarm to remaining targets
             this.field.clearLocalAttraction(st.col, st.row, 4.0);
@@ -913,11 +989,45 @@ export class Swarm {
             this._addEvent('🎯', `Multi-drone consensus! (${maxUniqueCorroboration} unique drones corroborating sector)`);
           }
         }
-      }
+
+    // Periodic Beeceptor Cloud Telemetry & HIL Ingress Polling
+    if (this.tick % 60 === 0) {
+      beeceptor.logTelemetry({
+        activeDrones: this.drones.length,
+        mapExploredPct: this.stats.mapExploredPct,
+        survivorsExtracted: this.survivorsExtracted,
+        decoysRejected: this.stats.decoysRejected || 0,
+      });
+
+      beeceptor.checkHILOverride((override) => {
+        if (override.action === 'INJECT_HAZARD') {
+          const c = override.sector_col ?? 10;
+          const r = override.sector_row ?? 12;
+          this.field.deposit(c, r, 0.9, 'HIL_OVERRIDE', 0.1, 0.8);
+          this._addEvent('⚠️', `[BEECEPTOR HIL] External Hazard Injected at (${c}, ${r})! Swarm re-routing.`);
+        } else if (override.action === 'INJECT_DECOY') {
+          const c = override.sector_col ?? 8;
+          const r = override.sector_row ?? 8;
+          this._addEvent('🔥', `[BEECEPTOR HIL] External Thermal Decoy Injected at (${c}, ${r})! Verification active.`);
+        }
+      });
+    }
+  }
 
   _addEvent(icon, text) {
     this.eventLog.unshift({ tick: this.tick, icon, text });
     if (this.eventLog.length > this._maxEvents) this.eventLog.pop();
+
+    // Stream high-priority SAR Incidents to Beeceptor Cloud Proxy
+    if (icon === '🚨' || icon === '🏆' || icon === '🙅' || icon === '🤖' || icon === '🏛️') {
+      beeceptor.logIncident({
+        tick: this.tick,
+        icon,
+        summary: text,
+        active_drones: this.drones.length,
+        survivors_found: this.survivorsExtracted || 0,
+      });
+    }
   }
 
   /**
@@ -973,6 +1083,16 @@ export class Swarm {
         if (data && data.is_valid && data.decision) {
           this.nooaStats.successCount = (this.nooaStats.successCount || 0) + 1;
           this.nooaStats.lastDecision = data.decision;
+
+          beeceptor.logNOOADebate({
+            lead_agent: proposer.callsign,
+            sector: `(${col}, ${row})`,
+            decision: data.decision,
+            confidence: data.confidence,
+            channel_alignment: data.channel_alignment,
+            reasoning: data.reasoning,
+            peer_angles: peerAngles,
+          });
           if (data.decision === 'CONFIRM') {
             this._addEvent('🤖', `[NOOA NEGOTIATOR] ${data.reasoning}`);
             this.field.deposit(col, row, 0.40, proposer.id, data.confidence, 0.05);

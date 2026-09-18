@@ -39,3 +39,6 @@ venv.bak/
 
 # MacOS
 .DS_Store
+
+# Local benchmark dumps
+benchmark_raw_results.json

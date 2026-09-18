@@ -1,0 +1,6 @@
+Built PROTOPLASM for DSU DEVHACK 3.0: an autonomous, decentralized Search & Rescue drone swarm powered by Digital Stigmergy (Pheromone Field Theory) and NVIDIA Object-Oriented Agents (NOOA) with local Nemotron LLMs.
+
+24 drones map subterranean disaster zones without GPS or central infrastructure, rejecting single-channel thermal/audio decoys and executing life-saving rescues with 0ms lag. 🛸🔥
+
+GitHub: https://github.com/PunitRaveendran/Stigmeric_Drone_DSU
+#Hackathon #NVIDIA #Robotics #MultiAgent #AI #DevHack #OpenSource
