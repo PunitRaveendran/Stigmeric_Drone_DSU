@@ -130,12 +130,14 @@ export class Visualizer {
     const { cols, rows } = this.field;
     const W = this.canvas.width || 800;
     const H = this.canvas.height || 600;
-    const marginPx = 16 * this.dpr;
+    const marginPx = 28 * this.dpr;
     const availW = Math.max(10, W - marginPx * 2);
     const availH = Math.max(10, H - marginPx * 2);
-    const cs = Math.max(1, Math.min(availW / cols, availH / rows));
-    const ox = marginPx + (availW - cs * cols) / 2;
-    const oy = marginPx + (availH - cs * rows) / 2;
+    // Apply a 0.76 zoom factor so the map fits gracefully between sidebars and structures don't look oversized
+    const baseCs = Math.min(availW / cols, availH / rows);
+    const cs = Math.max(1, baseCs * 0.76);
+    const ox = (W - cs * cols) / 2;
+    const oy = (H - cs * rows) / 2;
     const layout = { cols, rows, cs, ox, oy };
     if (availW > 10 && availH > 10) {
       this._layout = layout;
