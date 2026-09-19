@@ -10,6 +10,24 @@ export function MapCanvas({ canvasRef, onSelectDrone, instances }) {
 
   const satelliteMode = useSimStore((s) => s.modes.satellite);
   const dominantRegime = useSimStore((s) => s.dominantRegime);
+  const customConfig = useSimStore((s) => s.customConfig);
+  const scenario = useSimStore((s) => s.scenario);
+
+  // Derive effective radius from custom config or scenario preset
+  const radiusMap = {
+    'simple': 80,
+    'multi-survivor': 150,
+    'disaster-zone': 200,
+    'mass-casualty': 300,
+    'catastrophe': 450,
+  };
+  const effectiveRadius = scenario === 'custom'
+    ? (customConfig.areaRadiusMeters || 200)
+    : (radiusMap[scenario] || 200);
+
+  // Base zoom 16.6 corresponds to 200m radius (~4 city blocks).
+  // Doubling radius drops zoom by 1; halving radius increases zoom by 1.
+  const calcZoom = (r) => Math.max(14.5, Math.min(18.8, 16.6 - Math.log2(r / 200)));
 
   // ─── Initialize MapLibre GL JS Satellite Basemap ─────────────────────────
   useEffect(() => {
@@ -41,7 +59,7 @@ export function MapCanvas({ canvasRef, onSelectDrone, instances }) {
           ],
         },
         center: [-122.3995, 37.7915], // Downtown San Francisco Financial District Urban Core
-        zoom: 16.6,
+        zoom: calcZoom(effectiveRadius),
         pitch: 0,
         bearing: 0,
         interactive: false, // Locked to disaster sector to maintain 1:1 canvas coordinate sync
@@ -60,6 +78,20 @@ export function MapCanvas({ canvasRef, onSelectDrone, instances }) {
       }
     };
   }, []);
+
+  // ─── Dynamic Map Zoom with Radius Changes ─────────────────────────────────
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const targetZoom = calcZoom(effectiveRadius);
+    try {
+      mapInstanceRef.current.easeTo({
+        zoom: targetZoom,
+        duration: 500,
+      });
+    } catch (e) {
+      console.warn('Map zoom update failed:', e);
+    }
+  }, [effectiveRadius]);
 
   // ─── Toggle Satellite Map Visibility ─────────────────────────────────────
   useEffect(() => {

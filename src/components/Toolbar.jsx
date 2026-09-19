@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Send,
   Zap,
+  Crosshair,
 } from 'lucide-react';
 import { useSimStore } from '../store/simStore.js';
 import { IconButton } from '../ui/IconButton.jsx';
@@ -32,11 +33,15 @@ export function Toolbar({
   const droneCount = useSimStore((s) => s.droneCount);
   const modes = useSimStore((s) => s.modes);
   const bftEnabled = useSimStore((s) => s.bftEnabled);
+  const customConfig = useSimStore((s) => s.customConfig);
 
   const setSimSpeed = useSimStore((s) => s.setSimSpeed);
   const setScenario = useSimStore((s) => s.setScenario);
   const setDroneCount = useSimStore((s) => s.setDroneCount);
   const toggleMode = useSimStore((s) => s.toggleMode);
+  const setCustomConfig = useSimStore((s) => s.setCustomConfig);
+
+  const isCustom = scenario === 'custom';
 
   return (
     <header className="mission-toolbar" role="toolbar" aria-label="Simulation Controls">
@@ -106,6 +111,7 @@ export function Toolbar({
           />
         </div>
 
+
         <div className="toolbar-group">
           <label className="toolbar-control-label" htmlFor="scenario-select">
             SCENARIO
@@ -124,6 +130,7 @@ export function Toolbar({
             <option value="catastrophe">Mega Catastrophe (12 Survivors)</option>
             <option value="multi-survivor">Multi-Survivor (2 Targets)</option>
             <option value="simple">Single Survivor (1 Target)</option>
+            <option value="custom">⚙ Custom Generator</option>
           </select>
         </div>
       </div>
@@ -229,6 +236,88 @@ export function Toolbar({
           />
         </div>
       </div>
+
+      {/* ─── ROW 3: Custom Scenario Generator Panel (conditional) ─────────── */}
+      {isCustom && (
+        <div className="toolbar-row toolbar-row-custom">
+          <div className="custom-scenario-panel">
+            <Crosshair size={13} style={{ opacity: 0.6 }} />
+            <span className="custom-panel-title">GENERATOR</span>
+
+            <div className="toolbar-divider" />
+
+            {/* Survivor Count */}
+            <div className="config-slider-group">
+              <label className="config-slider-label" htmlFor="custom-survivors">
+                SURVIVORS
+              </label>
+              <input
+                id="custom-survivors"
+                type="range"
+                min="1"
+                max="30"
+                step="1"
+                value={customConfig.survivorCount}
+                onChange={(e) => setCustomConfig({ survivorCount: parseInt(e.target.value, 10) })}
+                className="toolbar-range-input config-range"
+              />
+              <span className="toolbar-value-pill mono-num config-value">{customConfig.survivorCount}</span>
+            </div>
+
+            <div className="toolbar-divider" />
+
+            {/* Area Radius */}
+            <div className="config-slider-group">
+              <label className="config-slider-label" htmlFor="custom-radius">
+                RADIUS
+              </label>
+              <input
+                id="custom-radius"
+                type="range"
+                min="50"
+                max="500"
+                step="10"
+                value={customConfig.areaRadiusMeters}
+                onChange={(e) => setCustomConfig({ areaRadiusMeters: parseInt(e.target.value, 10) })}
+                className="toolbar-range-input config-range"
+              />
+              <span className="toolbar-value-pill mono-num config-value">{customConfig.areaRadiusMeters}m</span>
+            </div>
+
+            <div className="toolbar-divider" />
+
+            {/* Spread Factor */}
+            <div className="config-slider-group">
+              <label className="config-slider-label" htmlFor="custom-spread">
+                SPREAD
+              </label>
+              <input
+                id="custom-spread"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={Math.round(customConfig.spreadFactor * 100)}
+                onChange={(e) => setCustomConfig({ spreadFactor: parseInt(e.target.value, 10) / 100 })}
+                className="toolbar-range-input config-range"
+              />
+              <span className="toolbar-value-pill mono-num config-value">
+                {customConfig.spreadFactor <= 0.3 ? 'TIGHT' : customConfig.spreadFactor >= 0.7 ? 'WIDE' : 'MED'}
+              </span>
+            </div>
+
+            <div className="toolbar-divider" />
+
+            <button
+              className="custom-generate-btn"
+              onClick={onReset}
+              title="Generate new procedural scenario and restart simulation"
+            >
+              GENERATE
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

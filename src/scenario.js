@@ -80,6 +80,43 @@ function fillIrregularZone(grid, cols, rows, type, centerCol, centerRow, points)
   }
 }
 
+// ─── NATO Phonetic Alphabet for survivor callsigns ──────────────────────────
+const NATO_ALPHABET = [
+  'ALPHA','BRAVO','CHARLIE','DELTA','ECHO','FOXTROT','GOLF','HOTEL',
+  'INDIA','JULIET','KILO','LIMA','MIKE','NOVEMBER','OSCAR','PAPA',
+  'QUEBEC','ROMEO','SIERRA','TANGO','UNIFORM','VICTOR','WHISKEY',
+  'XRAY','YANKEE','ZULU',
+];
+
+const SECTOR_NAMES = [
+  'NE TOWER SECTOR','SW RUINS SECTOR','NW STRUCTURAL GAP','SE VAULT SECTOR',
+  'CENTER CORRIDOR','NORTH CONCOURSE','WEST OVERPASS','EAST METRO TERMINAL',
+  'NW COLLAPSED ATRIUM','NE LOGISTICS HUB','SW RESIDENTIAL BLOCK','SE SUBSTATION',
+  'NORTH PLAZA','SOUTH ARCADE','WEST ANNEX','EAST BRIDGE','CENTRAL ATRIUM',
+  'METRO UNDERPASS','PARKING DECK','SERVICE TUNNEL','ROOFTOP ACCESS','BASEMENT LEVEL',
+  'LOADING DOCK','UTILITY CORRIDOR','EMERGENCY EXIT','STAIRWELL ALPHA','STAIRWELL BRAVO',
+  'MEZZANINE LEVEL','SKYBRIDGE JUNCTION','MAINTENANCE SHAFT',
+];
+
+// ─── Seeded PRNG (Mulberry32) for reproducible generation ───────────────────
+function mulberry32(seed) {
+  let s = seed | 0;
+  return function() {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ─── Gaussian sample from seeded PRNG ───────────────────────────────────────
+function gaussianSeeded(rng, mean, sigma) {
+  const u1 = rng();
+  const u2 = rng();
+  const z = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2);
+  return mean + sigma * z;
+}
+
 // ─── DisasterScenario class ──────────────────────────────────────────────────
 
 export class DisasterScenario {
@@ -87,8 +124,9 @@ export class DisasterScenario {
    * @param {number} cols
    * @param {number} rows
    * @param {string} name   Preset scenario name
+   * @param {object} [config]  Optional procedural generation config
    */
-  constructor(cols, rows, name = 'disaster-zone') {
+  constructor(cols, rows, name = 'disaster-zone', config = null) {
     this.cols = cols;
     this.rows = rows;
     this.name = name;
@@ -102,7 +140,20 @@ export class DisasterScenario {
     // Structural wall contours (for realistic disaster map rendering)
     this.structures = [];
 
-    this._buildScenario(name);
+    const radiusMap = {
+      'simple': 80,
+      'multi-survivor': 150,
+      'disaster-zone': 200,
+      'mass-casualty': 300,
+      'catastrophe': 450,
+    };
+    this.areaRadiusMeters = (config && config.areaRadiusMeters) ? config.areaRadiusMeters : (radiusMap[name] || 200);
+
+    if (config) {
+      this._generateProceduralScenario(config);
+    } else {
+      this._buildScenario(name);
+    }
   }
 
   _buildScenario(name) {
@@ -264,6 +315,189 @@ export class DisasterScenario {
    * Get available scenario names.
    */
   static getScenarioNames() {
-    return ['catastrophe', 'mass-casualty', 'disaster-zone', 'multi-survivor', 'simple'];
+    return ['catastrophe', 'mass-casualty', 'disaster-zone', 'multi-survivor', 'simple', 'custom'];
+  }
+
+  /**
+   * Factory: Generate a procedural disaster scenario from configuration.
+   *
+   * @param {object} config
+   * @param {number} config.survivorCount  Number of survivors (1–30)
+   * @param {number} config.areaRadiusMeters  Search area radius in meters (50–500)
+   * @param {number} config.spreadFactor  0.0 = tight cluster, 1.0 = wide uniform
+   * @param {number} [config.seed]  Optional PRNG seed for reproducibility
+   * @returns {DisasterScenario}
+   */
+  static generate(config = {}) {
+    const {
+      survivorCount = 8,
+      areaRadiusMeters = 200,
+      spreadFactor = 0.5,
+      seed = null,
+    } = config;
+
+    // Dynamic grid sizing: each cell ≈ 8m × 8m ground truth
+    const gridSize = Math.max(10, Math.min(40, Math.round(areaRadiusMeters / 8)));
+    const cols = gridSize;
+    const rows = gridSize;
+
+    const scenario = new DisasterScenario(cols, rows, 'custom', {
+      survivorCount: Math.max(1, Math.min(30, survivorCount)),
+      spreadFactor: Math.max(0, Math.min(1, spreadFactor)),
+      areaRadiusMeters: Math.max(50, Math.min(500, areaRadiusMeters)),
+      cols,
+      rows,
+      seed: seed !== null ? seed : Math.floor(Math.random() * 2147483647),
+    });
+    scenario.areaRadiusMeters = Math.max(50, Math.min(500, areaRadiusMeters));
+
+    return scenario;
+  }
+
+  /**
+   * Procedural generation algorithm using Gaussian mixture model.
+   * Called by constructor when config is provided.
+   * @param {object} config
+   */
+  _generateProceduralScenario(config) {
+    const { survivorCount, spreadFactor, cols, rows, seed } = config;
+    const rng = mulberry32(seed);
+    const grid = this.grid;
+
+    // ─── Step 1: Base terrain — rubble perimeter + clear interior ─────
+    const margin = 2;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const isPerimeter = (c < margin || c >= cols - margin || r < margin || r >= rows - margin);
+        grid[r * cols + c] = isPerimeter ? CELL.RUBBLE : CELL.CLEAR;
+      }
+    }
+
+    // Add scattered interior rubble patches for realism
+    const rubblePatches = Math.floor(cols * rows * 0.06);
+    for (let i = 0; i < rubblePatches; i++) {
+      const rc = margin + Math.floor(rng() * (cols - 2 * margin));
+      const rr = margin + Math.floor(rng() * (rows - 2 * margin));
+      if (grid[rr * cols + rc] === CELL.CLEAR) {
+        grid[rr * cols + rc] = CELL.RUBBLE;
+      }
+    }
+
+    // ─── Step 2: Gaussian mixture survivor placement ─────────────────
+    const innerCols = cols - 2 * margin;
+    const innerRows = rows - 2 * margin;
+    const centerC = cols / 2;
+    const centerR = rows / 2;
+
+    // Number of cluster centers: more clusters = more spread-out groups
+    const K = Math.max(1, Math.ceil(survivorCount / 3));
+
+    // Generate cluster center positions
+    const clusterCenters = [];
+    for (let k = 0; k < K; k++) {
+      // Distribute cluster centers using angular offset for good spatial coverage
+      const angle = (2 * Math.PI * k / K) + rng() * 0.5;
+      const maxDist = Math.min(innerCols, innerRows) * 0.35;
+      const dist = maxDist * (0.3 + rng() * 0.7);
+      const cc = Math.round(centerC + Math.cos(angle) * dist);
+      const cr = Math.round(centerR + Math.sin(angle) * dist);
+      clusterCenters.push({
+        col: Math.max(margin + 1, Math.min(cols - margin - 2, cc)),
+        row: Math.max(margin + 1, Math.min(rows - margin - 2, cr)),
+      });
+    }
+
+    // Place survivors around cluster centers with Gaussian spread
+    const placed = [];
+    const minSep = 2; // minimum separation in cells
+    // Sigma scales with spreadFactor: 0.0 → tight (sigma=1.5), 1.0 → wide (sigma=innerSize*0.3)
+    const sigmaBase = 1.5 + spreadFactor * (Math.min(innerCols, innerRows) * 0.28);
+
+    let attempts = 0;
+    while (placed.length < survivorCount && attempts < survivorCount * 50) {
+      attempts++;
+      // Pick a random cluster center
+      const cluster = clusterCenters[Math.floor(rng() * K)];
+
+      // Sample position from Gaussian around cluster center
+      const sc = Math.round(gaussianSeeded(rng, cluster.col, sigmaBase));
+      const sr = Math.round(gaussianSeeded(rng, cluster.row, sigmaBase));
+
+      // Bounds check (must be inside inner zone)
+      if (sc < margin + 1 || sc >= cols - margin - 1 || sr < margin + 1 || sr >= rows - margin - 1) {
+        continue;
+      }
+
+      // Check minimum separation from all placed survivors
+      const tooClose = placed.some(p => {
+        const dx = p.col - sc;
+        const dy = p.row - sr;
+        return (dx * dx + dy * dy) < minSep * minSep;
+      });
+      if (tooClose) continue;
+
+      // Check cell isn't already occupied
+      if (grid[sr * cols + sc] !== CELL.CLEAR) continue;
+
+      // Place survivor (2×2 footprint)
+      const idx = placed.length;
+      const callsign = idx < NATO_ALPHABET.length ? NATO_ALPHABET[idx] : `SURVIVOR-${idx + 1}`;
+      const sectorName = idx < SECTOR_NAMES.length ? SECTOR_NAMES[idx] : `SECTOR ${idx + 1}`;
+
+      fillRect(grid, cols, CELL.SURVIVOR, sc, sr, sc + 1, sr + 1);
+      this.survivors.push({
+        id: callsign,
+        name: `Survivor ${callsign.charAt(0) + callsign.slice(1).toLowerCase()}`,
+        col: sc,
+        row: sr,
+        sector: sectorName,
+      });
+      placed.push({ col: sc, row: sr });
+    }
+
+    // ─── Step 3: Hazard / Decoy injection (proportional) ─────────────
+    const hotDebrisCount = Math.max(1, Math.floor(survivorCount * 0.4));
+    const windNoiseCount = Math.max(1, Math.floor(survivorCount * 0.3));
+    const hazardCount = Math.max(1, Math.ceil(survivorCount * 0.15));
+
+    const placeHazardPatch = (type, count) => {
+      let placedH = 0;
+      let att = 0;
+      while (placedH < count && att < count * 40) {
+        att++;
+        const hc = margin + 1 + Math.floor(rng() * (innerCols - 2));
+        const hr = margin + 1 + Math.floor(rng() * (innerRows - 2));
+        // Don't place on survivors or other hazards
+        if (grid[hr * cols + hc] !== CELL.CLEAR) continue;
+        // Ensure minimum 3-cell distance from any survivor
+        const nearSurvivor = placed.some(p => {
+          const dx = p.col - hc;
+          const dy = p.row - hr;
+          return (dx * dx + dy * dy) < 9;
+        });
+        if (nearSurvivor) continue;
+
+        fillRect(grid, cols, type, hc, hr, Math.min(cols - 1, hc + 1), Math.min(rows - 1, hr + 1));
+        placedH++;
+      }
+    };
+
+    placeHazardPatch(CELL.HOT_DEBRIS, hotDebrisCount);
+    placeHazardPatch(CELL.WIND_NOISE, windNoiseCount);
+    placeHazardPatch(CELL.HAZARD, hazardCount);
+
+    // ─── Step 4: Generate structural footprints around cluster centers ─
+    for (let k = 0; k < Math.min(K, 6); k++) {
+      const cc = clusterCenters[k];
+      const halfW = 2 + Math.floor(rng() * 3);
+      const halfH = 2 + Math.floor(rng() * 3);
+      this.structures.push({
+        c0: Math.max(0, cc.col - halfW),
+        r0: Math.max(0, cc.row - halfH),
+        c1: Math.min(cols - 1, cc.col + halfW),
+        r1: Math.min(rows - 1, cc.row + halfH),
+        label: `SECTOR ${String.fromCharCode(65 + k)}-${k + 1}`,
+      });
+    }
   }
 }

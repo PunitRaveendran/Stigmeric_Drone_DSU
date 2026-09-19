@@ -14,6 +14,13 @@ export const useSimStore = create((set, get) => ({
   },
   bftEnabled: true,
 
+  // ─── Custom Scenario Generation Config ────────────────────────────────
+  customConfig: {
+    survivorCount: 8,
+    areaRadiusMeters: 200,
+    spreadFactor: 0.5,
+  },
+
   // ─── Selected Entity (Single Right-Side Inspector Dossier) ───────────────
   selectedEntity: null, // { type: 'drone' | 'survivor', id: number | string } | null
   selectedDroneDetail: null,
@@ -67,6 +74,9 @@ export const useSimStore = create((set, get) => ({
     modes: { ...state.modes, [key]: !state.modes[key] },
   })),
   setBftEnabled: (bftEnabled) => set({ bftEnabled }),
+  setCustomConfig: (patch) => set((s) => ({
+    customConfig: { ...s.customConfig, ...patch },
+  })),
 
   setSelectedEntity: (type, id) => {
     if (!type || id === null || id === undefined) {

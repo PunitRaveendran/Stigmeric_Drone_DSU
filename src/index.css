@@ -78,6 +78,7 @@ html, body {
   height: 100%;
   z-index: var(--z-map);
   pointer-events: none;
+  filter: brightness(0.24) contrast(1.45) saturate(0.6);
 }
 
 .sim-canvas {
@@ -273,6 +274,75 @@ html, body {
   background: var(--bg-surface-hover);
   color: var(--text-primary);
   border-color: var(--border-strong);
+}
+
+/* ─── Custom Scenario Generator Panel ───────────────────────────────────── */
+.toolbar-row-custom {
+  border-top: 1px solid var(--border-default);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.custom-scenario-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.custom-panel-title {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.config-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.config-slider-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.config-range {
+  width: 60px;
+}
+
+.config-value {
+  font-size: 12px;
+  min-width: 32px;
+  text-align: center;
+}
+
+.custom-generate-btn {
+  padding: 4px 14px;
+  background: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-xs);
+  color: var(--text-on-accent);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.08s ease;
+  white-space: nowrap;
+}
+
+.custom-generate-btn:hover {
+  opacity: 0.85;
+}
+
+.custom-generate-btn:active {
+  transform: translateY(1px);
 }
 
 /* ─── UI Primitives (Black & White Minimalism, Poppy High Contrast) ─────── */

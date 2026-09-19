@@ -123,6 +123,8 @@ export class Visualizer {
     this._layout = null;
     this._noiseCanvas = null; // regenerate on resize
     this._satelliteCanvas = null; // regenerate on resize
+    this._displayStrength = null;
+    this._heatmapCanvas = null;
   }
 
   _getLayout() {
@@ -159,18 +161,81 @@ export class Visualizer {
     // ── Update smooth display field ──────────────────────────────────────
     this._updateDisplayField();
 
-    // ── 1. Background + Satellite Map Transparency + Vignette ────────────
+    // ── 1. Tactical Blackout + Dynamic Discovery Reveal (Satellite & Terrain) ──
     if (this.showSatelliteMode) {
-      // Clear canvas so MapLibre GL JS live satellite map renders underneath
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (this.showFogOfWar) {
+        // Complete blackout of satellite basemap: fill canvas with solid obsidian dark
+        ctx.fillStyle = '#05070e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Subtle edge vignette to blend satellite terrain into floating dark panels
-      const vcx = canvas.width / 2, vcy = canvas.height / 2;
-      const vg = ctx.createRadialGradient(vcx, vcy, Math.min(canvas.width, canvas.height) * 0.32, vcx, vcy, Math.max(canvas.width, canvas.height) * 0.72);
-      vg.addColorStop(0, 'transparent');
-      vg.addColorStop(1, 'rgba(0, 0, 0, 0.65)');
-      ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Punch transparent discovery cutouts where drones are moving & exploring
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+
+        // a) Launch & RTL Base Station Perimeter Reveal
+        const bx = ox + (cols * 0.5) * cs;
+        const by = oy + (rows * 0.85) * cs;
+        const baseR = cs * 2.8;
+        const baseGrad = ctx.createRadialGradient(bx, by, cs * 0.4, bx, by, baseR);
+        baseGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+        baseGrad.addColorStop(0.65, 'rgba(0, 0, 0, 0.88)');
+        baseGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+        ctx.fillStyle = baseGrad;
+        ctx.beginPath();
+        ctx.arc(bx, by, baseR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // b) Explored Territory Discovery (Cells mapped by the swarm)
+        const exp = this.field.explorationGrid;
+        if (exp) {
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const val = exp[r * cols + c];
+              if (val < 0.06) continue;
+              const cellX = ox + (c + 0.5) * cs;
+              const cellY = oy + (r + 0.5) * cs;
+              const cellR = cs * 1.55;
+              const cellGrad = ctx.createRadialGradient(cellX, cellY, 0, cellX, cellY, cellR);
+              const revealA = Math.min(1.0, val * 1.12);
+              cellGrad.addColorStop(0.0, `rgba(0, 0, 0, ${revealA.toFixed(2)})`);
+              cellGrad.addColorStop(0.65, `rgba(0, 0, 0, ${(revealA * 0.75).toFixed(2)})`);
+              cellGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+              ctx.fillStyle = cellGrad;
+              ctx.beginPath();
+              ctx.arc(cellX, cellY, cellR, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        // c) Dynamic Discovery Cones: Live sensor visibility around every moving drone
+        for (const drone of this.swarm.drones) {
+          const rx = lerp(drone.prevX, drone.x, alpha);
+          const ry = lerp(drone.prevY, drone.y, alpha);
+          const px = ox + rx * cs;
+          const py = oy + ry * cs;
+          const fovR = cs * 3.8; // real-time dynamic optical/thermal discovery cone
+          const droneGrad = ctx.createRadialGradient(px, py, cs * 0.35, px, py, fovR);
+          droneGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+          droneGrad.addColorStop(0.68, 'rgba(0, 0, 0, 0.92)');
+          droneGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+          ctx.fillStyle = droneGrad;
+          ctx.beginPath();
+          ctx.arc(px, py, fovR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore(); // restores globalCompositeOperation back to 'source-over'
+      } else {
+        // Full map view when fog of war is toggled off
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const vcx = canvas.width / 2, vcy = canvas.height / 2;
+        const vg = ctx.createRadialGradient(vcx, vcy, Math.min(canvas.width, canvas.height) * 0.32, vcx, vcy, Math.max(canvas.width, canvas.height) * 0.72);
+        vg.addColorStop(0, 'transparent');
+        vg.addColorStop(1, 'rgba(0, 0, 0, 0.65)');
+        ctx.fillStyle = vg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
     } else {
       ctx.fillStyle = PALETTE.bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -179,6 +244,9 @@ export class Visualizer {
 
     // ── 2. Pheromone heatmap (offscreen + bloom) ─────────────────────────
     this._drawHeatmap(ctx, cols, rows, cs, ox, oy);
+
+    // ── 2.5. Tactical Search Radius Geofence & Range Rings ───────────────
+    this._drawSearchRadiusGeofence(ctx, cols, rows, cs, ox, oy);
 
     // ── 3. Grid lines (optional) ─────────────────────────────────────────
     if (this.showGrid) {
@@ -254,6 +322,124 @@ export class Visualizer {
     ctx.strokeStyle = 'rgba(76,201,240,0.07)';
     ctx.lineWidth   = 1;
     ctx.strokeRect(ox, oy, cols * cs, rows * cs);
+  }
+
+  // ─── Tactical Search Radius Geofence & Range Rings ────────────────────────
+  _drawSearchRadiusGeofence(ctx, cols, rows, cs, ox, oy) {
+    const dpr = this.dpr || 1;
+    const t = this._frameTime;
+
+    // Center of the search area on the canvas
+    const cx = ox + (cols * cs) / 2;
+    const cy = oy + (rows * cs) / 2;
+
+    // Radius in pixels (scaled to the grid)
+    const maxR = Math.min(cols, rows) * cs * 0.48;
+    if (maxR <= 5) return;
+
+    // Actual radius in meters
+    const radiusMeters = this.scenario.areaRadiusMeters || 200;
+    const diameterMeters = radiusMeters * 2;
+    const areaKm2 = (Math.PI * Math.pow(radiusMeters / 1000, 2)).toFixed(2);
+
+    ctx.save();
+
+    // 1. Subtle radial search area tint (active tactical zone highlight)
+    const radGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+    radGrad.addColorStop(0.0, 'rgba(76, 201, 240, 0.04)');
+    radGrad.addColorStop(0.7, 'rgba(76, 201, 240, 0.015)');
+    radGrad.addColorStop(0.95, 'rgba(76, 201, 240, 0.06)');
+    radGrad.addColorStop(1.0, 'rgba(76, 201, 240, 0.0)');
+    ctx.fillStyle = radGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Tactical Inner Range Rings (33%, 66%)
+    ctx.strokeStyle = 'rgba(76, 201, 240, 0.16)';
+    ctx.lineWidth = 1 * dpr;
+    ctx.setLineDash([4 * dpr, 6 * dpr]);
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR * 0.33, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR * 0.66, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Range ring distance labels
+    ctx.font = `600 ${Math.max(8.5 * dpr, 9)}px 'Space Mono', monospace`;
+    ctx.fillStyle = 'rgba(76, 201, 240, 0.40)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`${Math.round(radiusMeters * 0.33)}m`, cx, cy - maxR * 0.33 - 2);
+    ctx.fillText(`${Math.round(radiusMeters * 0.66)}m`, cx, cy - maxR * 0.66 - 2);
+
+    // 3. Rotating Dashed Outer Geofence Perimeter Ring
+    ctx.strokeStyle = 'rgba(76, 201, 240, 0.70)';
+    ctx.lineWidth = 2 * dpr;
+    ctx.shadowBlur = 8 * dpr;
+    ctx.shadowColor = '#4cc9f0';
+    ctx.setLineDash([12 * dpr, 8 * dpr]);
+    ctx.lineDashOffset = -t * 16 * dpr;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 4. Secondary Counter-Rotating Outer Reticle Ring
+    ctx.strokeStyle = 'rgba(255, 214, 10, 0.32)';
+    ctx.lineWidth = 1 * dpr;
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([6 * dpr, 14 * dpr]);
+    ctx.lineDashOffset = t * 10 * dpr;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR + 5 * dpr, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    // 5. Cardinal Crosshair Ticks (N, S, E, W)
+    const tickLen = 8 * dpr;
+    ctx.strokeStyle = 'rgba(76, 201, 240, 0.85)';
+    ctx.lineWidth = 1.5 * dpr;
+    // North
+    ctx.beginPath(); ctx.moveTo(cx, cy - maxR - tickLen); ctx.lineTo(cx, cy - maxR + tickLen); ctx.stroke();
+    // South
+    ctx.beginPath(); ctx.moveTo(cx, cy + maxR - tickLen); ctx.lineTo(cx, cy + maxR + tickLen); ctx.stroke();
+    // West
+    ctx.beginPath(); ctx.moveTo(cx - maxR - tickLen, cy); ctx.lineTo(cx - maxR + tickLen, cy); ctx.stroke();
+    // East
+    ctx.beginPath(); ctx.moveTo(cx + maxR - tickLen, cy); ctx.lineTo(cx + maxR + tickLen, cy); ctx.stroke();
+
+    // 6. Tactical Telemetry Badge at Top of Perimeter
+    const badgeText = `⌖ SEARCH RADIUS: ${radiusMeters}m (⌀ ${diameterMeters}m) | ${areaKm2} km²`;
+    ctx.font = `700 ${Math.max(9.5 * dpr, 10)}px 'Space Mono', monospace`;
+    const textW = ctx.measureText(badgeText).width;
+    const badgePadX = 8 * dpr;
+    const badgeH = 18 * dpr;
+    const badgeY = cy - maxR - badgeH - 6 * dpr;
+
+    ctx.fillStyle = 'rgba(5, 9, 20, 0.88)';
+    ctx.strokeStyle = 'rgba(76, 201, 240, 0.55)';
+    ctx.lineWidth = 1 * dpr;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(cx - textW / 2 - badgePadX, badgeY, textW + badgePadX * 2, badgeH, 3 * dpr);
+    } else {
+      ctx.rect(cx - textW / 2 - badgePadX, badgeY, textW + badgePadX * 2, badgeH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#4cc9f0';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, cx, badgeY + badgeH / 2);
+
+    ctx.restore();
   }
 
   // ─── Smooth display field ─────────────────────────────────────────────────
@@ -502,14 +688,18 @@ export class Visualizer {
     const currentTick = this.swarm.tick || 0;
 
     for (const drone of this.swarm.drones) {
+      // Only render speech bubble on selected or hovered drone to eliminate visual swarm clutter
+      const isTarget = this.selectedDroneId === drone.id || this.hoveredDrone?.id === drone.id;
+      if (!isTarget) continue;
+
       const px = ox + (lerp(drone.prevX, drone.x, alpha)) * cs;
       const py = oy + (lerp(drone.prevY, drone.y, alpha)) * cs;
       const speech = drone.lastDebateSpeech;
       const age = speech ? (currentTick - speech.tick) : 999;
 
-      if (speech && age >= 0 && age <= 50) {
+      if (speech && age >= 0 && age <= 60) {
         // Render Active Debate Speech Bubble
-        const opacity = Math.min(1.0, (50 - age) / 10);
+        const opacity = Math.min(1.0, (60 - age) / 10);
         ctx.save();
         ctx.globalAlpha = opacity;
 
@@ -556,41 +746,6 @@ export class Visualizer {
         ctx.textBaseline = 'middle';
         ctx.shadowBlur = 0;
         ctx.fillText(text, px, by + bubbleH / 2);
-        ctx.restore();
-      } else {
-        // Render Live Agent Status Box
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-
-        const isSentinel = drone.isSentinel;
-        const isRTL = drone.regime === 'RESCUED';
-        const label = isSentinel ? '📡 BEACON' : isRTL ? '🛸 RTL' : drone.regime;
-        const statusText = `💬 ${drone.callsign} [${label}]`;
-
-        ctx.font = `700 ${Math.max(7.5 * dpr, cs * 0.28)}px 'Space Mono', monospace`;
-        const textWidth = ctx.measureText(statusText).width;
-        const boxW = textWidth + 10 * dpr;
-        const boxH = cs * 0.55;
-        const bx = px - boxW / 2;
-        const by = py - cs * 1.25;
-
-        const bg = isSentinel ? 'rgba(255, 214, 10, 0.88)' : isRTL ? 'rgba(61, 220, 104, 0.88)' : 'rgba(15, 23, 42, 0.85)';
-        const border = isSentinel ? '#ffd60a' : isRTL ? '#3ddc68' : 'rgba(76, 201, 240, 0.5)';
-        const textClr = isSentinel ? '#000000' : isRTL ? '#000000' : '#4cc9f0';
-
-        ctx.fillStyle = bg;
-        ctx.strokeStyle = border;
-        ctx.lineWidth = 1 * dpr;
-
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(bx, by, boxW, boxH, 4 * dpr);
-        else ctx.rect(bx, by, boxW, boxH);
-        ctx.fill(); ctx.stroke();
-
-        ctx.fillStyle = textClr;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(statusText, px, by + boxH / 2);
         ctx.restore();
       }
     }
@@ -881,60 +1036,149 @@ export class Visualizer {
 
     const t = this._frameTime;
     const dpr = this.dpr || 1;
-    const iconSizePx = Math.max(14, Math.min(24, cs * 0.7));
-    const borderColor = CELL_BORDERS.SURVIVOR || '#3ddc68';
 
     for (const s of this.scenario.survivors) {
-      const isExtracted = this.swarm.isSurvivorExtracted ? this.swarm.isSurvivorExtracted(s.col, s.row) : this.swarm.rescuedCells.has(`${s.col},${s.row}`);
+      const isExtracted = this.swarm.isSurvivorExtracted 
+        ? this.swarm.isSurvivorExtracted(s.col, s.row) 
+        : this.swarm.rescuedCells.has(`${s.col},${s.row}`);
 
       const cx = ox + (s.col + 0.5) * cs;
       const cy = oy + (s.row + 0.5) * cs;
 
       if (!isExtracted) {
-        // 1. Glowing outer pulse halo
-        const pulseR = cs * (0.65 + 0.15 * Math.sin(t * 3.5 + s.col));
         ctx.save();
-        ctx.globalAlpha = 0.25 + 0.10 * Math.sin(t * 3.0 + s.col);
-        ctx.fillStyle = borderColor;
-        ctx.shadowBlur  = cs * 1.2;
-        ctx.shadowColor = borderColor;
-        ctx.beginPath();
-        ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
 
-        // 2. Crisp target lock border ring
-        ctx.save();
+        // 1. Dual-Wave Expanding Tactical Radar Waves (Emergency Locator Beacon)
+        const waveA = (t * 1.6) % 1;
+        const waveB = (t * 1.6 + 0.5) % 1;
+
+        // Wave A (Primary Radar Pulse)
+        const rA = cs * (0.45 + waveA * 1.65);
+        const alphaA = Math.max(0, (1 - waveA) * 0.72);
         ctx.strokeStyle = '#00ffaa';
-        ctx.lineWidth   = 1.8 * dpr;
-        ctx.shadowBlur  = 10 * dpr;
+        ctx.lineWidth = 2 * dpr;
+        ctx.globalAlpha = alphaA;
+        ctx.shadowBlur = 16 * dpr;
         ctx.shadowColor = '#00ffaa';
         ctx.beginPath();
-        ctx.arc(cx, cy, cs * 0.60, 0, Math.PI * 2);
+        ctx.arc(cx, cy, rA, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.restore();
 
-        // 3. Standing Person Emoji ('🧍')
-        ctx.save();
-        ctx.textAlign    = 'center';
+        // Wave B (Secondary Echo Pulse)
+        const rB = cs * (0.45 + waveB * 1.65);
+        const alphaB = Math.max(0, (1 - waveB) * 0.72);
+        ctx.strokeStyle = '#00ffaa';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.globalAlpha = alphaB;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rB, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 2. High-Contrast Solid Dark Backing Disc (prevents any background bleed)
+        const discR = Math.max(14 * dpr, cs * 0.56);
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 20 * dpr;
+        ctx.shadowColor = '#00ffaa';
+        ctx.fillStyle = '#05140f'; // rich obsidian jade dark base
+        ctx.beginPath();
+        ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner glowing neon rim
+        ctx.strokeStyle = '#00ffaa';
+        ctx.lineWidth = 2.2 * dpr;
+        ctx.stroke();
+
+        // 3. Tactical Reticle Brackets (4 corners)
+        const brLen = discR * 0.48;
+        const brOff = discR * 0.96;
+        ctx.lineWidth = 1.6 * dpr;
+        ctx.beginPath();
+        // Top-left
+        ctx.moveTo(cx - brOff, cy - brOff + brLen); ctx.lineTo(cx - brOff, cy - brOff); ctx.lineTo(cx - brOff + brLen, cy - brOff);
+        // Top-right
+        ctx.moveTo(cx + brOff - brLen, cy - brOff); ctx.lineTo(cx + brOff, cy - brOff); ctx.lineTo(cx + brOff, cy - brOff + brLen);
+        // Bottom-left
+        ctx.moveTo(cx - brOff, cy + brOff - brLen); ctx.lineTo(cx - brOff, cy + brOff); ctx.lineTo(cx - brOff + brLen, cy + brOff);
+        // Bottom-right
+        ctx.moveTo(cx + brOff - brLen, cy + brOff); ctx.lineTo(cx + brOff, cy + brOff); ctx.lineTo(cx + brOff, cy + brOff - brLen);
+        ctx.stroke();
+
+        // 4. Hero Survivor Icon / Life-Signal Beacon Core
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = `${iconSizePx}px sans-serif`;
-        ctx.globalAlpha = 0.98;
-        ctx.fillText('🧍', cx, cy);
+        const glyphSize = Math.max(16, discR * 1.15);
+        ctx.font = `${glyphSize}px sans-serif`;
+        ctx.fillText('🧍', cx, cy - 1 * dpr);
+
+        // Emergency Vital Signs Pulse Dot (Heartbeat indicator)
+        const hbPulse = 1 + 0.3 * Math.sin(t * 8);
+        ctx.fillStyle = '#00ffaa';
+        ctx.shadowBlur = 8 * dpr;
+        ctx.shadowColor = '#00ffaa';
+        ctx.beginPath();
+        ctx.arc(cx, cy + discR * 0.65, 2.5 * dpr * hbPulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 5. Prominent Tactical Survivor Callsign Pill (High contrast & readable)
+        const badgeText = `● ${s.name.toUpperCase()} [ACTIVE VITAL]`;
+        ctx.font = `700 ${Math.max(9.5 * dpr, cs * 0.38)}px 'Space Mono', monospace`;
+        const textW = ctx.measureText(badgeText).width;
+        const pillW = textW + 16 * dpr;
+        const pillH = 18 * dpr;
+        const pillX = cx - pillW / 2;
+        const pillY = cy - discR - pillH - 6 * dpr;
+
+        ctx.fillStyle = 'rgba(5, 20, 14, 0.94)';
+        ctx.strokeStyle = '#00ffaa';
+        ctx.lineWidth = 1.2 * dpr;
+        ctx.shadowBlur = 10 * dpr;
+        ctx.shadowColor = 'rgba(0, 255, 170, 0.6)';
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(pillX, pillY, pillW, pillH, 4 * dpr);
+        } else {
+          ctx.rect(pillX, pillY, pillW, pillH);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#00ffaa';
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(badgeText, cx, pillY + pillH / 2);
+
+        ctx.restore();
+      } else {
+        // EXTRACTED / SECURED SURVIVOR (Clean, confirmed green checkmark)
+        ctx.save();
+        const discR = Math.max(12 * dpr, cs * 0.45);
+        ctx.fillStyle = 'rgba(10, 30, 20, 0.85)';
+        ctx.strokeStyle = '#3ddc68';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.shadowBlur = 8 * dpr;
+        ctx.shadowColor = '#3ddc68';
+        ctx.beginPath();
+        ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = `${Math.max(13, discR * 0.95)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 0;
+        ctx.fillText('✅', cx, cy);
+
+        const badgeText = `${s.name.toUpperCase()} [EXTRACTED]`;
+        ctx.font = `700 ${Math.max(8.5 * dpr, cs * 0.32)}px 'Space Mono', monospace`;
+        ctx.fillStyle = '#3ddc68';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(badgeText, cx, cy - discR - 4 * dpr);
         ctx.restore();
       }
-
-      // 4. Target HUD Label (always show name, updated to [SECURED] when extracted)
-      ctx.save();
-      const badgeText = isExtracted ? `✅ ${s.name} [SECURED]` : `🟢 ${s.name}`;
-      ctx.font = `700 ${Math.max(9 * dpr, cs * 0.36)}px 'Space Mono', monospace`;
-      ctx.fillStyle = isExtracted ? '#3ddc68' : '#00ffaa';
-      ctx.shadowBlur = 10 * dpr;
-      ctx.shadowColor = ctx.fillStyle;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(badgeText, cx, cy - cs * 0.70);
-      ctx.restore();
     }
   }
 
@@ -1013,32 +1257,13 @@ export class Visualizer {
 
   // ─── Drone draw (directional chevron + regime glow) ───────────────────────
 
-  // ─── Fog of War Atmospheric Shroud ───────────────────────────────────────
+  // ─── Fog of War Atmospheric Shroud (Handled Dynamically in render) ───────
 
   _drawFogOfWar(ctx, cols, rows, cs, ox, oy) {
-    if (!this.showFogOfWar) return;
-    const exp = this.field.explorationGrid;
-    if (!exp) return;
-
-    ctx.save();
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const idx = r * cols + c;
-        const explored = exp[idx];
-        if (explored >= 0.96) continue; // fully revealed
-
-        const px = ox + c * cs;
-        const py = oy + r * cs;
-        const alpha = Math.max(0, 0.88 * (1.0 - explored));
-
-        ctx.fillStyle = `rgba(5, 9, 20, ${alpha.toFixed(3)})`;
-        ctx.fillRect(px - 0.2, py - 0.2, cs + 0.4, cs + 0.4);
-      }
-    }
-    ctx.restore();
+    // Fog of war & dynamic sensor discovery are handled seamlessly in the main render pipeline
   }
 
-  // ─── Drone draw (directional chevron + regime glow + Sentinel Beacon) ───────
+  // ─── Drone draw (directional chevron + regime glow + clean tactical halos) ──
 
   _drawDrone(ctx, drone, cs, ox, oy, alpha) {
     // Interpolated position
@@ -1056,7 +1281,7 @@ export class Visualizer {
     const py = oy + (ry + jy) * cs;
     const r  = Math.max(cs * 0.28, 5);
 
-    // Dynamic Role & Security Indicators (Orthogonal to Regime)
+    // Dynamic Role & Security Rings (Clean minimal halos, no text clutter)
 
     // ═══ CYBER-PHYSICAL SECURITY: Rogue Drone Visual Indicator ═══
     if (drone.isRogue) {
@@ -1068,11 +1293,6 @@ export class Visualizer {
       ctx.beginPath();
       ctx.arc(px, py, r * (2.2 + 0.5 * roguePulse), 0, Math.PI * 2);
       ctx.stroke();
-
-      ctx.font = `700 ${Math.max(8, cs * 0.26)}px 'Space Mono', monospace`;
-      ctx.fillStyle = '#ff0055';
-      ctx.textAlign = 'center';
-      ctx.fillText('⚠️ ROGUE [SPOOFING]', px, py - r * 2.4);
       ctx.restore();
     } else if (drone.isQuarantined) {
       ctx.save();
@@ -1082,11 +1302,6 @@ export class Visualizer {
       ctx.beginPath();
       ctx.arc(px, py, r * 2.0, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.font = `700 ${Math.max(8, cs * 0.26)}px 'Space Mono', monospace`;
-      ctx.fillStyle = '#9d4edd';
-      ctx.textAlign = 'center';
-      ctx.fillText('🔒 QUARANTINED', px, py - r * 2.4);
       ctx.restore();
     }
 
@@ -1101,12 +1316,6 @@ export class Visualizer {
       ctx.beginPath();
       ctx.arc(px, py, r * (2.0 + 0.4 * stigPulse), 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.font = `700 ${Math.max(7, cs * 0.24)}px 'Space Mono', monospace`;
-      ctx.fillStyle = '#ff9500';
-      ctx.textAlign = 'center';
-      ctx.globalAlpha = 0.85;
-      ctx.fillText('\uD83D\uDCF5 STIGMERGIC', px, py - r * 2.5);
       ctx.restore();
     }
 
@@ -1120,11 +1329,6 @@ export class Visualizer {
       ctx.beginPath();
       ctx.arc(px, py, r * (1.8 + 0.3 * pulseRelay), 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.font = `700 ${Math.max(8, cs * 0.28)}px 'Space Mono', monospace`;
-      ctx.fillStyle = '#00f0ff';
-      ctx.textAlign = 'center';
-      ctx.fillText('\uD83D\uDCE1 RELAY', px, py - r * 2.0);
       ctx.restore();
     } else if (drone.role === 'SENTINEL') {
       ctx.save();
@@ -1133,13 +1337,9 @@ export class Visualizer {
       ctx.beginPath();
       ctx.arc(px, py, r * 1.8, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.font = `700 ${Math.max(8, cs * 0.28)}px 'Space Mono', monospace`;
-      ctx.fillStyle = '#ff9e00';
-      ctx.textAlign = 'center';
-      ctx.fillText('\uD83D\uDD0B SENTINEL', px, py - r * 2.0);
       ctx.restore();
     } else if (drone.isSentinel) {
-      // Legacy survivor lock beacon
+      // Survivor lock beacon
       ctx.save();
       const waveR = cs * (0.8 + 1.2 * ((jt * 2.5) % 1));
       const waveAlpha = (1 - ((jt * 2.5) % 1)) * 0.6;
@@ -1151,12 +1351,6 @@ export class Visualizer {
       ctx.beginPath();
       ctx.arc(px, py, waveR, 0, Math.PI * 2);
       ctx.stroke();
-
-      ctx.globalAlpha = 0.85;
-      ctx.font = `700 ${Math.max(9, cs * 0.35)}px 'Space Mono', monospace`;
-      ctx.fillStyle = '#00ffaa';
-      ctx.textAlign = 'center';
-      ctx.fillText('\uD83C\uDFAF LOCK BEACON', px, py - r * 2.2);
       ctx.restore();
     }
 
@@ -1215,15 +1409,7 @@ export class Visualizer {
 
     ctx.restore(); // undo translate+rotate
 
-    // Altitude Flight Layer Telemetry Tag (e.g. 15m / 25m / 35m)
-    if (drone.altitude) {
-      ctx.font = `600 ${Math.max(7.5, cs * 0.25)}px 'Space Mono', monospace`;
-      ctx.fillStyle = 'rgba(180, 220, 255, 0.70)';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${drone.altitude}m`, px, py + r * 1.95);
-    }
-
-    // Selected Drone Tactical Reticle Ring
+    // Selected Drone Tactical Reticle Ring (Clean brackets without text)
     if (this.selectedDroneId === drone.id) {
       ctx.save();
       const selPulse = 1 + 0.18 * Math.sin(jt * 6);
@@ -1244,12 +1430,6 @@ export class Visualizer {
       ctx.moveTo(px, py - ringR - brLen); ctx.lineTo(px, py - ringR + 3);
       ctx.moveTo(px, py + ringR - 3); ctx.lineTo(px, py + ringR + brLen);
       ctx.stroke();
-
-      // Selected Tag
-      ctx.font = `700 ${Math.max(8.5, cs * 0.28)}px 'Space Mono', monospace`;
-      ctx.fillStyle = '#00ffff';
-      ctx.textAlign = 'center';
-      ctx.fillText('SELECTED', px, py - ringR - 6);
       ctx.restore();
     }
 

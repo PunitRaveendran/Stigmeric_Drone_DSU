@@ -32,11 +32,20 @@ export function useSimLoop(canvasRef, updateTelemetryRef) {
 
   // ─── Build / Reset Simulation Core ───────────────────────────────────────
   const buildSimulation = useCallback(() => {
-    const { scenario: scenarioName, droneCount, bftEnabled } = useSimStore.getState();
+    const { scenario: scenarioName, droneCount, bftEnabled, customConfig } = useSimStore.getState();
     const inst = instancesRef.current;
 
-    inst.scenario = new DisasterScenario(GRID_COLS, GRID_ROWS, scenarioName);
-    inst.field = new PheromoneField(GRID_COLS, GRID_ROWS);
+    // ─── Dynamic grid: custom scenarios derive cols/rows from config ─────
+    if (scenarioName === 'custom') {
+      inst.scenario = DisasterScenario.generate(customConfig);
+    } else {
+      inst.scenario = new DisasterScenario(GRID_COLS, GRID_ROWS, scenarioName);
+    }
+
+    const cols = inst.scenario.cols;
+    const rows = inst.scenario.rows;
+
+    inst.field = new PheromoneField(cols, rows);
     inst.sensors = new SensorGenerator(inst.scenario);
     inst.swarm = new Swarm(inst.field, inst.sensors);
 
@@ -51,6 +60,14 @@ export function useSimLoop(canvasRef, updateTelemetryRef) {
       inst.visualizer.field = inst.field;
       inst.visualizer.scenario = inst.scenario;
       inst.visualizer.swarm = inst.swarm;
+
+      // Re-derive layout for new grid dimensions
+      const canvas = inst.visualizer.canvas;
+      const parent = canvas?.parentElement;
+      if (parent) {
+        const dpr = window.devicePixelRatio || 1;
+        inst.visualizer.resize(parent.clientWidth, parent.clientHeight, dpr);
+      }
     }
 
     loopStateRef.current.realElapsedMs = 0;
@@ -325,6 +342,38 @@ export function useSimLoop(canvasRef, updateTelemetryRef) {
       pause();
     };
   }, [canvasRef, buildSimulation, start, pause]);
+
+  // ─── Dynamic Scenario & Radius Live Adaptation ───────────────────────────
+  const customConfig = useSimStore((s) => s.customConfig);
+  const scenario = useSimStore((s) => s.scenario);
+  const isInitialMountRef = useRef(true);
+
+  useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+
+    if (scenario === 'custom') {
+      const timer = setTimeout(() => {
+        const wasRunning = loopStateRef.current.isRunning;
+        buildSimulation();
+        if (wasRunning) {
+          start();
+        } else {
+          instancesRef.current.visualizer?.render(1);
+        }
+      }, 75);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    scenario,
+    customConfig.areaRadiusMeters,
+    customConfig.survivorCount,
+    customConfig.spreadFactor,
+    buildSimulation,
+    start,
+  ]);
 
   // ─── Subscribed Actions triggered from UI ────────────────────────────────
   const injectRogue = useCallback(() => {
