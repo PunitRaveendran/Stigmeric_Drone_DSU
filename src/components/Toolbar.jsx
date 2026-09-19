@@ -229,14 +229,14 @@ export function Toolbar({
             <ExternalLink size={10} />
           </a>
           <a
-            href="https://dashboard.render.com"
+            href="https://protoplasm-sar-swarm.onrender.com"
             target="_blank"
             rel="noopener noreferrer"
             className="toolbar-link-badge toolbar-link-render"
-            title="Render Cloud Deployment Track (Full-Stack Microservices & ML)"
+            title="Open Live Render Cloud Deployment"
           >
             <Cloud size={11} />
-            <span>Render</span>
+            <span>Render (Live)</span>
             <ExternalLink size={9} />
           </a>
           <IconButton
