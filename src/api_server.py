@@ -430,8 +430,53 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
                 "persistence_threshold": 0.65,
                 "description": "Newtonian Thermal Cooling & Homeostatic Biological PINN"
             })
-            self.wfile.write(json.dumps(data, indent=2).encode())
-            return
+        # ─── Static Frontend Serving (serves Vite production build when dist/ exists) ───
+        if not parsed.path.startswith('/api/'):
+            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            dist_dir = os.path.join(root_dir, 'dist')
+            if os.path.exists(dist_dir):
+                req_path = parsed.path.lstrip('/')
+                if not req_path or req_path == 'index.html':
+                    file_path = os.path.join(dist_dir, 'index.html')
+                else:
+                    file_path = os.path.join(dist_dir, req_path)
+
+                # Security check to prevent directory traversal
+                real_file = os.path.realpath(file_path)
+                real_dist = os.path.realpath(dist_dir)
+                if real_file.startswith(real_dist) and os.path.isfile(real_file):
+                    ext = os.path.splitext(real_file)[1].lower()
+                    mime_types = {
+                        '.html': 'text/html; charset=utf-8',
+                        '.js': 'application/javascript; charset=utf-8',
+                        '.css': 'text/css; charset=utf-8',
+                        '.json': 'application/json; charset=utf-8',
+                        '.svg': 'image/svg+xml',
+                        '.png': 'image/png',
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.ico': 'image/x-icon',
+                        '.wasm': 'application/wasm',
+                    }
+                    content_type = mime_types.get(ext, 'application/octet-stream')
+                    self.send_response(200)
+                    self.send_header('Content-Type', content_type)
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    with open(real_file, 'rb') as f:
+                        self.wfile.write(f.read())
+                    return
+                elif not '.' in os.path.basename(parsed.path):
+                    # SPA client-side routing fallback
+                    index_path = os.path.join(dist_dir, 'index.html')
+                    if os.path.exists(index_path):
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'text/html; charset=utf-8')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        with open(index_path, 'rb') as f:
+                            self.wfile.write(f.read())
+                        return
 
         return super().do_GET()
 

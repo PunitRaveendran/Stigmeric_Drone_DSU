@@ -1,0 +1,26 @@
+# ─── Render Infrastructure-as-Code Blueprint ────────────────────────────────
+# Track: Render Cloud Deployment Track
+# Project: PROTOPLASM — Stigmergic Autonomous SAR Swarm
+# Hosts: Full-Stack Microservices, Web UI, PINN Physics ODEs & ML Inference
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ─── 1. Unified Full-Stack Service (Docker Multi-Stage Container) ───────────
+  - type: web
+    name: protoplasm-sar-swarm
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: TF_ENABLE_ONEDNN_OPTS
+        value: "0"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: RENDER
+        value: "true"

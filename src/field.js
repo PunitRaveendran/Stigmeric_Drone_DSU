@@ -103,9 +103,15 @@ export class PheromoneField {
 
     // Update running average confidence and spatial cell uncertainty
     const cVal = confidence !== undefined ? confidence : amount;
-    const uVal = uncertainty !== undefined ? uncertainty : Math.max(0, 1.0 - cVal);
-    this.cellConfidence[i]  = this.cellConfidence[i] * 0.70 + cVal * 0.30;
-    this.cellUncertainty[i] = Math.max(0.02, this.cellUncertainty[i] * 0.75 + uVal * 0.25);
+    this.cellConfidence[i] = this.cellConfidence[i] * 0.70 + cVal * 0.30;
+    
+    // Spatial cell uncertainty: unvisited fog = 0.85+, scanned/cleared cells = low (0.05-0.20),
+    // ambiguous candidate areas = moderate. Prevent empty cell visits from inflating uncertainty back to 1.0!
+    const scannedFactor = this.explorationGrid[i];
+    const baseUncertainty = (1.0 - Math.min(1.0, scannedFactor)) * 0.85;
+    const signalAmbiguity = (cVal > 0.30 && cVal < 0.75) ? 0.40 : 0.05;
+    const targetU = Math.max(0.05, Math.min(1.0, baseUncertainty + signalAmbiguity));
+    this.cellUncertainty[i] = this.cellUncertainty[i] * 0.65 + targetU * 0.35;
   }
 
   /**
@@ -314,8 +320,9 @@ export class PheromoneField {
           const factor = Math.max(0.4, 1.0 - (distSq / (rSq * 1.5)));
           this.explorationGrid[idx] = Math.min(1.0, this.explorationGrid[idx] + factor * 0.4);
           
-          // Also clear spatial uncertainty radially (so unreachable edges don't pull drones forever)
-          this.cellUncertainty[idx] = Math.max(0.05, this.cellUncertainty[idx] - factor * 0.05);
+          // Clear spatial uncertainty radially so scanned sectors guide drones outward toward unmapped frontier
+          const uTarget = Math.max(0.05, (1.0 - this.explorationGrid[idx]) * 0.85);
+          this.cellUncertainty[idx] = Math.min(this.cellUncertainty[idx], uTarget);
         }
       }
     }

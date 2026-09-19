@@ -141,8 +141,8 @@ export const useSimStore = create((set, get) => ({
 
   pushEvents: (newEvents) => {
     if (!newEvents || newEvents.length === 0) return;
-    set((state) => ({
-      eventLog: [...newEvents, ...state.eventLog].slice(0, 500),
+    set(() => ({
+      eventLog: newEvents.slice(0, 500),
     }));
   },
 }));

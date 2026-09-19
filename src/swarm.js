@@ -62,6 +62,7 @@ export class Swarm {
     // Live event log — human-readable messages for the narrative feed
     this.eventLog = [];
     this._maxEvents = 20;
+    this._eventSeq = 0; // monotonic counter for UI sync
 
     // Dispatch log — records when a cell reaches SOLIDIFY for the first time
     this.dispatchLog = [];
@@ -80,6 +81,11 @@ export class Swarm {
     // NOOA Multi-Agent Tactical Negotiation State (Non-blocking & Deduplicated)
     this._activeNOOASectors = new Set();
     this._nooaInFlightCount = 0;
+
+    // Agent Debate Feed & Stats (drives the Debate tab in the console)
+    this.debateFeed = [];
+    this._maxDebateFeed = 200;
+    this.debateStats = { proposals: 0, agrees: 0, rejects: 0, consensusConfirmed: 0 };
   }
 
   // ─── Cyber-Physical Security & Byzantine Fault Tolerance Controls ──────────
@@ -247,6 +253,8 @@ export class Swarm {
     this.securityStats = this.stats.securityStats;
     this._activeNOOASectors.clear();
     this._nooaInFlightCount = 0;
+    this.debateFeed = [];
+    this.debateStats = { proposals: 0, agrees: 0, rejects: 0, consensusConfirmed: 0 };
     this.field.reset();
   }
 
@@ -284,11 +292,17 @@ export class Swarm {
     // Mission completion requires mapping the reachable disaster area and resolving candidates.
     const isMissionComplete = (this.isMissionComplete === true) || (this._hasLoggedRTL === true);
 
+    // Build list of survivors that still need discovery — drives drone attraction
+    const unrescuedTargets = this.survivorTargets
+      .filter(st => st.status !== 'EXTRACTED')
+      .map(st => ({ col: st.col, row: st.row, id: st.id, name: st.name }));
+
     const swarmContext = {
       activeSentinels: this.activeSentinels,
       drones: this.drones,
       isRTL: isMissionComplete,
       rescuedCells: this.rescuedCells,
+      unrescuedTargets,
     };
 
     // ═══ DUAL-AXIS AUTONOMY: Mesh Topology & Role Determination ══════════════
@@ -466,15 +480,33 @@ export class Swarm {
         if (msg.type === 'CANDIDATE_PROPOSAL' && this.byzantineDefenseEnabled) {
           const actualType = this.sensors.scenario.getCellType(msg.col, msg.row);
           const isRealSurvivor = (actualType === 'SURVIVOR');
+          const isDecoyZone = (actualType === 'HOT_DEBRIS' || actualType === 'WIND_NOISE' || actualType === 'MANNEQUIN');
 
-          // Adversarial check: claiming high confidence at an empty/rubble/hazard cell
-          if (!isRealSurvivor && (msg.confidence >= 0.70 || msg.isForged)) {
+          // Check if there is an authentic survivor or decoy entity anywhere in the 3x3 receptive field (radius 2 cells)
+          let isNearValidTarget = isRealSurvivor || isDecoyZone;
+          if (!isNearValidTarget) {
+            for (let dc = -2; dc <= 2; dc++) {
+              for (let dr = -2; dr <= 2; dr++) {
+                const t = this.sensors.scenario.getCellType(msg.col + dc, msg.row + dr);
+                if (t === 'SURVIVOR' || t === 'HOT_DEBRIS' || t === 'WIND_NOISE' || t === 'MANNEQUIN') {
+                  isNearValidTarget = true;
+                  break;
+                }
+              }
+              if (isNearValidTarget) break;
+            }
+          }
+
+          // Adversarial check: claiming very high confidence at an empty cell far from any entity, OR explicitly forged
+          const isSuspicious = (!isNearValidTarget && msg.confidence >= 0.85) || msg.isForged;
+          if (isSuspicious) {
             sender.securityViolations = (sender.securityViolations || 0) + 1;
 
-            // Multi-agent peer trust slashing across all honest peers
+            // Multi-agent peer trust slashing — gradual penalty (requires 3+ violations to quarantine)
+            const penalty = msg.isForged ? 0.50 : 0.25;
             for (const peer of this.drones) {
               if (peer.id !== sender.id && !peer.isRogue) {
-                peer.penalizePeer(sender.id, 0.70);
+                peer.penalizePeer(sender.id, penalty);
               }
             }
 
@@ -508,17 +540,17 @@ export class Swarm {
 
             if (msg.type === 'CANDIDATE_PROPOSAL') {
               const dist = Math.hypot(receiver.x - sender.x, receiver.y - sender.y);
-              if (dist <= 3.5) {
-              receiver.inbox.push({
-                type: 'VOTE_REQUEST',
-                fromId: sender.id,
-                callsign: sender.callsign,
-                col: msg.col,
-                row: msg.row,
-                tick: this.tick,
-              });
+              if (dist <= 4.0) {
+                receiver.inbox.push({
+                  type: 'VOTE_REQUEST',
+                  fromId: sender.id,
+                  callsign: sender.callsign,
+                  col: msg.col,
+                  row: msg.row,
+                  tick: this.tick,
+                });
+              }
             }
-          }
           }
         }
 
@@ -526,8 +558,6 @@ export class Swarm {
         const debateKey = `${msg.type}-${msg.col},${msg.row}`;
         if (!this._debateLogThrottle.has(debateKey)) {
           this._debateLogThrottle.add(debateKey);
-          // Clear throttle every 60 ticks so events can repeat
-          if (this.tick % 60 === 0) this._debateLogThrottle.clear();
 
           if (msg.type === 'CANDIDATE_PROPOSAL' && msg.confidence >= 0.40) {
             this._addEvent('📢', `Agent ${msg.callsign} → ALL: "I'm reading ${(msg.confidence * 100).toFixed(0)}% tri-modal signal at (${msg.col},${msg.row}). Requesting verification from nearby agents."`);
@@ -536,6 +566,21 @@ export class Swarm {
               this._dispatchNOOANegotiation(sender, msg.col, msg.row, msg.confidence);
             }
           }
+        }
+
+        // ═══ DEBATE STATS & FEED TRACKING ═══
+        // Only track meaningful proposals (C >= 40%) that passed the unique-sector throttle
+        if (msg.type === 'CANDIDATE_PROPOSAL' && msg.confidence >= 0.40 && !this._debateLogThrottle.has(`debatestat-${msg.col},${msg.row}`)) {
+          this._debateLogThrottle.add(`debatestat-${msg.col},${msg.row}`);
+          this.debateStats.proposals++;
+          this.debateFeed.unshift({
+            tick: this.tick,
+            type: 'PROPOSAL',
+            icon: '📢',
+            badge: 'PROPOSAL',
+            callsign: msg.callsign,
+            text: `${msg.callsign} proposes candidate @ (${msg.col},${msg.row}) — C=${(msg.confidence * 100).toFixed(0)}%`,
+          });
         }
       }
       sender.outbox = []; // clear after routing
@@ -577,12 +622,38 @@ export class Swarm {
               ? `YOLO Camera + YAMNet Audio alignment confirmed at ${(msg.confidence * 100).toFixed(0)}% confidence`
               : `Single-channel bias only — camera/audio missing from ${headingDeg}° approach angle`;
             this._addEvent(emoji, `Agent ${msg.callsign} [${headingDeg}° angle] votes ${msg.vote} @ (${msg.targetCol},${msg.targetRow}): "${reasoning}"`);
+
+            // Track debate stats (only once per unique vote)
+            if (msg.vote === 'AGREE') this.debateStats.agrees++;
+            else if (msg.vote === 'REJECT') this.debateStats.rejects++;
+
+            this.debateFeed.unshift({
+              tick: this.tick,
+              type: msg.vote,
+              icon: emoji,
+              badge: msg.vote,
+              callsign: msg.callsign,
+              text: `${msg.callsign} votes ${msg.vote} @ (${msg.targetCol},${msg.targetRow}) — C=${(msg.confidence * 100).toFixed(0)}%`,
+            });
           }
         } else if (msg.type === 'CONSENSUS_CONFIRMED') {
           const debateKey3 = `consensus-${msg.col},${msg.row}`;
           if (!this._debateLogThrottle.has(debateKey3)) {
             this._debateLogThrottle.add(debateKey3);
             this._addEvent('🏛️', `DEBATE CONSENSUS @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT → Agent ${msg.callsign}: "Multi-agent consensus reached! Survivor confirmed. Requesting extraction."`);
+
+            // Reinforce confirmed survivor location with strong attraction trail
+            this.field.deposit(msg.col, msg.row, 0.65, msg.fromId, 0.95, 0.02);
+
+            this.debateStats.consensusConfirmed++;
+            this.debateFeed.unshift({
+              tick: this.tick,
+              type: 'CONSENSUS',
+              icon: '🏛️',
+              badge: 'CONSENSUS',
+              callsign: msg.callsign,
+              text: `CONSENSUS @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT — Confirmed by ${msg.callsign}`,
+            });
           }
         } else if (msg.type === 'CONSENSUS_REJECTED') {
           const debateKey4 = `rejected-${msg.col},${msg.row}`;
@@ -590,10 +661,23 @@ export class Swarm {
             this._debateLogThrottle.add(debateKey4);
             this._addEvent('🙅', `DEBATE REJECTED @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT → Agent ${msg.callsign}: "False positive! Multi-agent debate rejected this signal. Clearing trail."`);
             this.field.clearLocalAttraction(msg.col, msg.row, 3.0, false);
+            this.debateFeed.unshift({
+              tick: this.tick,
+              type: 'REJECT',
+              icon: '🙅',
+              badge: 'REJECTED',
+              callsign: msg.callsign,
+              text: `REJECTED @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT — Decoy cleared by ${msg.callsign}`,
+            });
           }
         }
       }
       sender.outbox = [];
+    }
+
+    // Cap debate feed to prevent unbounded growth
+    if (this.debateFeed.length > this._maxDebateFeed) {
+      this.debateFeed.length = this._maxDebateFeed;
     }
 
     // Process vote messages received in second pass
@@ -863,7 +947,8 @@ export class Swarm {
       }
 
   _addEvent(icon, text) {
-    this.eventLog.unshift({ tick: this.tick, icon, text });
+    this._eventSeq++;
+    this.eventLog.unshift({ tick: this.tick, icon, text, seq: this._eventSeq });
     if (this.eventLog.length > this._maxEvents) this.eventLog.pop();
   }
 

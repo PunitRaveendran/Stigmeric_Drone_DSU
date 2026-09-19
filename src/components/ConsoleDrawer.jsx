@@ -53,7 +53,7 @@ export function ConsoleDrawer() {
               }}
             >
               <MessageSquare size={12} />
-              <span>Debate ({debateFeed.length})</span>
+              <span>Debate ({(debateStats.proposals || 0) + (debateStats.agrees || 0) + (debateStats.rejects || 0) + (debateStats.consensusConfirmed || 0)})</span>
             </button>
 
             <button

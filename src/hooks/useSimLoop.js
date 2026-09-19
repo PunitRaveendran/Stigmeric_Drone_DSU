@@ -238,11 +238,12 @@ export function useSimLoop(canvasRef, updateTelemetryRef) {
       useSimStore.getState().setDebateFeed([...swarm.debateFeed]);
     }
 
-    // 6. Event Log batching
-    if (eventLog && eventLog.length !== loopStateRef.current.lastEventCount) {
-      const newEntries = eventLog.slice(0, eventLog.length - loopStateRef.current.lastEventCount);
-      loopStateRef.current.lastEventCount = eventLog.length;
-      useSimStore.getState().pushEvents(newEntries);
+    // 6. Event Log sync (uses monotonic sequence counter to detect new events)
+    const swarmSeq = swarm._eventSeq || 0;
+    if (eventLog && swarmSeq !== loopStateRef.current.lastEventCount) {
+      // Push the entire current eventLog snapshot (it's already capped at 20 items)
+      loopStateRef.current.lastEventCount = swarmSeq;
+      useSimStore.getState().pushEvents([...eventLog]);
     }
   }, [updateTelemetryRef]);
 

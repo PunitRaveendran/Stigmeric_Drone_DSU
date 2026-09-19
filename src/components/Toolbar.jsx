@@ -14,6 +14,7 @@ import {
   Send,
   Zap,
   Crosshair,
+  Cloud,
 } from 'lucide-react';
 import { useSimStore } from '../store/simStore.js';
 import { IconButton } from '../ui/IconButton.jsx';
@@ -226,6 +227,17 @@ export function Toolbar({
           >
             <span>n8n Cloud</span>
             <ExternalLink size={10} />
+          </a>
+          <a
+            href="https://dashboard.render.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="toolbar-link-badge toolbar-link-render"
+            title="Render Cloud Deployment Track (Full-Stack Microservices & ML)"
+          >
+            <Cloud size={11} />
+            <span>Render</span>
+            <ExternalLink size={9} />
           </a>
           <IconButton
             icon={Send}

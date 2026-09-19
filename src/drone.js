@@ -503,26 +503,20 @@ export class Drone {
       }
     }
 
-    // Unrescued Target Attraction: pull idle drones toward survivors that still need discovery
+    // Local Candidate Target Attraction: when within local acoustic / thermal detection range (dist <= 6.5),
+    // assist convergence toward the candidate without overriding global map exploration sweeps
     if (swarmContext.unrescuedTargets && swarmContext.unrescuedTargets.length > 0) {
-      let bestDx = 0, bestDy = 0, bestDist = Infinity;
       for (const tgt of swarmContext.unrescuedTargets) {
-        const tKey = `${tgt.col},${tgt.row}`;
-        const hasSentinel = swarmContext.activeSentinels && swarmContext.activeSentinels.has(tKey);
-        if (hasSentinel) continue;
         const dx = (tgt.col + 0.5) - this.x;
         const dy = (tgt.row + 0.5) - this.y;
         const dist = Math.hypot(dx, dy);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestDx = dx;
-          bestDy = dy;
+
+        if (dist > 1.2 && dist <= 6.5) {
+          const pull = ((6.5 - dist) / 6.5) * 0.38;
+          rx += (dx / dist) * pull;
+          ry += (dy / dist) * pull;
+          break;
         }
-      }
-      if (bestDist > 3.0 && bestDist < 25.0) {
-        const pull = 0.25;
-        rx += (bestDx / bestDist) * pull;
-        ry += (bestDy / bestDist) * pull;
       }
     }
 
@@ -776,7 +770,14 @@ export class Drone {
       });
     }
 
-    if (this.confidence >= 0.25) {
+    // Candidate Proposal: Only propose when genuine multi-modal or high confidence evidence is observed (C >= 0.45),
+    // and throttle per sector (max 1 proposal per sector per 50 ticks) to prevent spam at spawn
+    if (!this._proposedSectors) this._proposedSectors = new Map();
+    const cellKey = `${this.col},${this.row}`;
+    const lastProposed = this._proposedSectors.get(cellKey) || -999;
+
+    if (this.confidence >= 0.45 && (tick - lastProposed > 50)) {
+      this._proposedSectors.set(cellKey, tick);
       this.lastDebateSpeech = {
         type: 'CANDIDATE_PROPOSAL',
         vote: 'PROPOSAL',
@@ -798,34 +799,54 @@ export class Drone {
       });
     }
 
-    // If this agent has received enough votes, broadcast a CONSENSUS result
-    const cellKey = `${this.col},${this.row}`;
-    const votes = this.votesReceived.get(cellKey);
-    if (votes && votes.length >= 3) {
-      const agrees = votes.filter(v => v.vote === 'AGREE').length;
-      const rejects = votes.filter(v => v.vote === 'REJECT').length;
-      if (agrees >= 3) {
-        this.outbox.push({
-          type: 'CONSENSUS_CONFIRMED',
-          fromId: this.id,
-          callsign: this.callsign,
-          col: this.col,
-          row: this.row,
-          agrees,
-          rejects,
-          tick,
-        });
-      } else if (rejects >= 2) {
-        this.outbox.push({
-          type: 'CONSENSUS_REJECTED',
-          fromId: this.id,
-          callsign: this.callsign,
-          col: this.col,
-          row: this.row,
-          agrees,
-          rejects,
-          tick,
-        });
+    // Check consensus across ALL candidate sectors this agent has proposed (does not require drone to remain static!)
+    if (!this._consensusResolved) this._consensusResolved = new Set();
+    for (const [targetKey, votes] of this.votesReceived.entries()) {
+      if (this._consensusResolved.has(targetKey)) continue;
+      if (votes && votes.length >= 2) {
+        const agrees = votes.filter(v => v.vote === 'AGREE').length;
+        const rejects = votes.filter(v => v.vote === 'REJECT').length;
+        const [tCol, tRow] = targetKey.split(',').map(Number);
+
+        if (agrees >= 2 && agrees >= rejects) {
+          this._consensusResolved.add(targetKey);
+          this.lastDebateSpeech = {
+            type: 'CONSENSUS',
+            vote: 'AGREE',
+            text: `🏆 CONSENSUS: Confirmed survivor at (${tCol},${tRow})!`,
+            callsign: this.callsign,
+            tick,
+          };
+          this.outbox.push({
+            type: 'CONSENSUS_CONFIRMED',
+            fromId: this.id,
+            callsign: this.callsign,
+            col: tCol,
+            row: tRow,
+            agrees,
+            rejects,
+            tick,
+          });
+        } else if (rejects >= 2 && rejects > agrees) {
+          this._consensusResolved.add(targetKey);
+          this.lastDebateSpeech = {
+            type: 'CONSENSUS',
+            vote: 'REJECT',
+            text: `❌ REJECTED: False positive at (${tCol},${tRow})`,
+            callsign: this.callsign,
+            tick,
+          };
+          this.outbox.push({
+            type: 'CONSENSUS_REJECTED',
+            fromId: this.id,
+            callsign: this.callsign,
+            col: tCol,
+            row: tRow,
+            agrees,
+            rejects,
+            tick,
+          });
+        }
       }
     }
   }
@@ -873,9 +894,23 @@ export class Drone {
           // Form our OWN opinion based on our current readings at/near this cell
           const dist = Math.hypot(this.col - msg.col, this.row - msg.row);
           let vote = 'ABSTAIN';
-          if (dist <= 2.5) {
-            // We're close enough to have our own readings
-            vote = this.confidence >= 0.30 ? 'AGREE' : 'REJECT';
+          if (dist <= 3.5) {
+            const r = this.lastReadings;
+            // Multi-channel cross corroboration:
+            // Genuine survivor: camera + audio/thermal active
+            // Decoy: single-channel spike without corroboration
+            const hasMultiModal = (r.camera > 0.22 && (r.thermal > 0.28 || r.audio > 0.28)) ||
+                                  (r.thermal > 0.42 && r.audio > 0.38);
+            const isSingleChannelDecoy = (r.thermal > 0.45 && r.camera < 0.12 && r.audio < 0.12) ||
+                                         (r.audio > 0.45 && r.camera < 0.12 && r.thermal < 0.12);
+
+            if (hasMultiModal || this.confidence >= 0.45) {
+              vote = 'AGREE';
+            } else if (isSingleChannelDecoy || (this.confidence < 0.22 && dist <= 2.0)) {
+              vote = 'REJECT';
+            } else {
+              vote = this.confidence >= 0.35 ? 'AGREE' : 'REJECT';
+            }
           }
           if (vote !== 'ABSTAIN') {
             const speechText = vote === 'AGREE' 

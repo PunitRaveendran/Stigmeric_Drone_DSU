@@ -325,6 +325,30 @@ python src/train_pinns.py
 npm run build
 ```
 
+## 🚀 Cloud Deployment & Hackathon Sponsor Tracks
+
+Protoplasm integrates enterprise cloud deployment, workflow automation, and open-data standards across 5 hackathon tracks:
+
+### 1. ☁️ Render Cloud Deployment Track
+* **Infrastructure-as-Code (IaC):** [`render.yaml`](render.yaml) defines a zero-configuration Render Blueprint.
+* **Unified Multi-Stage Dockerfile:** [`Dockerfile`](Dockerfile) builds the React 19/Vite web application in Stage 1, packages the lightweight CPU PyTorch and Python ML backend in Stage 2, and runs the unified service on port `10000`.
+* **Health & Liveness Probes:** Exposes `/api/health` for automated zero-downtime healthchecks on Render Cloud.
+* **1-Click Deploy:** Connect repository at [dashboard.render.com](https://dashboard.render.com) → Click **New +** → **Blueprint** → Select `Stigmeric_Drone_DSU` → Apply!
+
+### 2. 🐝 Beeceptor API & Agent Mocking Track
+* **HIL Simulation:** [`src/beeceptor.js`](src/beeceptor.js) streams real-time swarm telemetry and incident reports to Beeceptor Cloud (`https://stigmericdrone.proxy.beeceptor.com`).
+* **Interactive Inspection:** Live traffic inspection console available at [beeceptor.com/console/stigmericdrone](https://beeceptor.com/console/stigmericdrone).
+
+### 3. ⚡ n8n Automation Track
+* **Emergency Dispatch Gateway:** [`src/n8n.js`](src/n8n.js) triggers autonomous multi-step incident triage pipelines on [dronedsu.app.n8n.cloud](https://dronedsu.app.n8n.cloud).
+* **Automated Webhooks:** Direct payload dispatch for code-red survivor extraction events and automated responder notifications.
+
+### 4. 🐙 GitHub Developer Track (Title Sponsor)
+* **Standard Delivery:** Monorepo commit hygiene, semantic release tags, automated test validation (`src/test_suite.py`), and architectural documentation.
+
+### 5. 🌐 Trace Commons Track
+* **Autonomous Agent Trajectories:** Multi-agent debate logs, Byzantine fault mitigations, and stigmergic decision traces formatted for the Trace Commons open dataset.
+
 ---
 
 ## 📂 Repository Structure

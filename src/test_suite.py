@@ -181,5 +181,28 @@ class TestN8nDispatchGateway(unittest.TestCase):
         self.assertGreater(payload["triage"]["fused_confidence"], 0.85)
 
 
+class TestRenderCloudDeployment(unittest.TestCase):
+
+    def test_render_blueprint_config(self):
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        render_yaml_path = os.path.join(root_dir, "render.yaml")
+        self.assertTrue(os.path.exists(render_yaml_path), "render.yaml must exist at repo root")
+        with open(render_yaml_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("type: web", content)
+        self.assertIn("protoplasm-sar-swarm", content)
+        self.assertIn("healthCheckPath: /api/health", content)
+
+    def test_dockerfile_multistage(self):
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        dockerfile_path = os.path.join(root_dir, "Dockerfile")
+        self.assertTrue(os.path.exists(dockerfile_path), "Dockerfile must exist at repo root")
+        with open(dockerfile_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("frontend-builder", content)
+        self.assertIn("python:3.11-slim", content)
+        self.assertIn("EXPOSE 10000", content)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -276,6 +276,18 @@ html, body {
   border-color: var(--border-strong);
 }
 
+.toolbar-link-render {
+  border-color: rgba(70, 227, 183, 0.35);
+  color: #46e3b7;
+}
+
+.toolbar-link-render:hover {
+  background: rgba(70, 227, 183, 0.12);
+  border-color: #46e3b7;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(70, 227, 183, 0.25);
+}
+
 /* ─── Custom Scenario Generator Panel ───────────────────────────────────── */
 .toolbar-row-custom {
   border-top: 1px solid var(--border-default);
