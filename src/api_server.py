@@ -192,7 +192,7 @@ except Exception as e:
         'EMPTY': (0.0500, 0.9500),
     }
 
-# ─── 4. Phase 3: Tri-Modal Fusion & Profile Compilation ───────────────────────
+# ─── 4. Phase 3: Raw Neural Model Profile Compilation ─────────────────────────
 
 passive_thermal = {
     'SURVIVOR': 0.7800,
@@ -205,22 +205,17 @@ for ct in ['SURVIVOR', 'HOT_DEBRIS', 'WIND_NOISE', 'EMPTY']:
     y_val = yolo_results[ct]
     yh_val, yo_val = yamnet_results[ct]
     p_val = passive_thermal[ct]
-    c_fused = 0.4 * y_val + 0.4 * yh_val + 0.2 * p_val
-    decision = "HIGH-CONFIDENCE HUMAN" if c_fused >= 0.75 else ("VERIFY WITH OTHER DRONES" if c_fused >= 0.40 else "NO HUMAN")
 
     inference_cache[ct] = {
         'yolo': round(y_val, 4),
         'yamnet_human': round(yh_val, 4),
         'yamnet_other': round(yo_val, 4),
         'passive_thermal': p_val,
-        'trimodal_C': round(c_fused, 4),
-        'decision': decision,
     }
 
 inference_cache['SURVIVOR']['model_info'] = {
     'yolo_model': 'human_detector.pt (YOLOv8 custom-trained)',
     'yamnet_model': 'yamnet_binary_final (TF SavedModel fine-tuned)',
-    'formula': 'C = 0.4×YOLO + 0.4×YAMNet + 0.2×Passive',
 }
 
 # ─── 4b. Phase 4: Physics-Informed Neural Network (PINN) Loading ───────────────
@@ -289,13 +284,13 @@ def evaluate_pinn_drain(v_val=1.0, z_val=0.25, role_name="Scout", t_val=0.5):
 
 # ─── Summary ──────────────────────────────────────────────────────────────────
 print("\n" + "=" * 70)
-print("CALIBRATED INFERENCE PROFILES SUMMARY")
+print("RAW NEURAL MODEL FORWARD PASS OUTPUTS (CALIBRATION BASELINE)")
 print("=" * 70)
-print(f"{'Cell Type':<16} {'YOLO':>8} {'YAMNet':>8} {'Passive':>8} {'C_fused':>8} {'Decision':<25}")
+print(f"{'Cell Type':<16} {'YOLOv8':>10} {'YAMNet':>10} {'Passive':>10}")
 print("-" * 70)
 for ct in ['SURVIVOR', 'HOT_DEBRIS', 'WIND_NOISE', 'EMPTY']:
     d = inference_cache[ct]
-    print(f"{ct:<16} {d['yolo']:>8.4f} {d['yamnet_human']:>8.4f} {d['passive_thermal']:>8.4f} {d['trimodal_C']:>8.4f} {d['decision']:<25}")
+    print(f"{ct:<16} {d['yolo']:>10.4f} {d['yamnet_human']:>10.4f} {d['passive_thermal']:>10.4f}")
 print("=" * 70)
 
 # ─── 5. DualStack HTTP Server ─────────────────────────────────────────────────
@@ -322,7 +317,7 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
                     'yolo': 'human_detector.pt (YOLOv8 custom-trained)' if YOLO_AVAILABLE else 'FALLBACK_BASELINE',
                     'yamnet': 'yamnet_binary_final (TF SavedModel)' if YAMNET_AVAILABLE else 'FALLBACK_BASELINE',
                 },
-                'formula': 'C = 0.4 × YOLO + 0.4 × YAMNet + 0.2 × PassiveThermal',
+                'formula': 'P(survivor|r) = sigmoid(logOdds_prior + sum(ln(LR_i)))',
                 'inference_results': inference_cache,
                 'timestamp': time.time(),
             }

@@ -10,6 +10,7 @@
 [![YOLOv8](https://img.shields.io/badge/YOLOv8-Human%20Vision-00ffff.svg)](https://ultralytics.com)
 [![YAMNet Audio](https://img.shields.io/badge/YAMNet-Acoustic%20Inference-ff6f00.svg)](https://www.tensorflow.org/)
 [![MapLibre GL](https://img.shields.io/badge/MapLibre%20GL-Satellite%20Tactical-396.svg)](https://maplibre.org/)
+[![NVIDIA NOOA](https://img.shields.io/badge/NVIDIA-NOOA%20Nemotron-76B900.svg)](https://build.nvidia.com)
 [![DSU DevHack 3.0](https://img.shields.io/badge/DSU%20DevHack-3.0%20Track-blueviolet.svg)](https://dsudevhack3.tech)
 
 **A decentralized, bio-inspired multi-agent drone swarm simulation for Search and Rescue (SAR) in degraded, GPS/communication-denied disaster environments.**
@@ -52,6 +53,7 @@ Protoplasm solves these challenges through **stigmergy**—indirect coordination
 | 👁️ **Edge-AI Multi-Modal Fusion** | Tri-modal sensor cross-verification integrating **YOLOv8** (computer vision), fine-tuned **YAMNet** (acoustic human distress signals), and passive **Thermal/Gas** sensors. |
 | 🛡️ **Byzantine Fault Tolerance (BFT)** | Cryptographic peer trust scoring and voting filters to detect, isolate, and quarantine rogue drones injecting spoofed survivor coordinates. |
 | 💬 **Peer-to-Peer Agent Debate** | Autonomous in-flight debate protocol: drones broadcast proposals, cross-verify candidate sectors, and cast `AGREE` / `REJECT` votes to reach consensus. |
+| 🤖 **Local NVIDIA NOOA SLM** | Sub-2s local edge reasoning running GGUF Nemotron Nano 4B for sparse agentic debate in ambiguous target verification. |
 | 🎲 **Procedural Disaster Engine** | Dynamic scenario generator allowing custom survivor counts (1–30), search radius (50m–500m), and spatial distribution spread factors (Tight / Med / Wide). |
 | 🛰️ **Tactical Satellite Shroud** | MapLibre GL live satellite basemap (75% optical brightness) shrouded in pitch blackout, revealed dynamically via real-time drone discovery cones. |
 | 🧍 **Hero Survivor Beacons** | Multi-wave expanding radar pulses, solid obsidian contrast discs, corner reticles, vital heartbeat LEDs, and live tactical HUD callout pills. |
@@ -94,10 +96,10 @@ Protoplasm solves these challenges through **stigmergy**—indirect coordination
 ```
 
 ### 1. Axis 1: Cognitive Regimes
-* **`SPREAD` (Exploration):** Swarm expands rapidly across unmapped terrain driven by Shannon spatial entropy gradients $\nabla H(b)$.
+* **`SPREAD` (Exploration):** Swarm expands rapidly across unmapped terrain driven by multi-scale spatial uncertainty gradients.
 * **`CONVERGE` (Verification):** When a candidate signal exceeds threshold ($C \ge 0.35$), nearby drones enter medium viscosity and follow $\nabla S(x)$ to inspect the target.
 * **`SOLIDIFY` (Target Lock):** Upon multi-drone corroboration, agents form a persistent lock perimeter, deploy rescue coordinates, and notify mission control.
-* **`RESCUED` (Dispersal):** Target is confirmed extracted. Pheromone peak is bleached, and drones scatter radially into remaining unmapped fog.
+* **`RESCUED` (Dispersal / RTL):** Target is confirmed extracted. Swarm continues search sweep until 100% grid exploration is complete, then initiates Return-to-Launch.
 
 ### 2. Axis 2: Operational Topology Roles
 * **`SCOUT`:** Standard explorer maintaining 80% pheromone bias and 20% random curiosity walk.
@@ -122,12 +124,12 @@ flowchart TD
     YAM -->|Confidence c_aud| FUSION
     PASS -->|Confidence c_pass| FUSION
 
-    FUSION -->|Cross-Channel Consistency Multiplier| BELIEF[Bayesian Belief State b_t]
+    FUSION -->|Log-Odds Likelihood Ratios| BELIEF[Bayesian Belief State b_t]
     
     BELIEF --> DECISION{Target Classification}
-    DECISION -->|C < 0.25| DECOY[Decoy / Heat Bleach: Clear Field]
-    DECISION -->|0.25 <= C < 0.65| DEBATE[Broadcast Peer Debate Proposal]
-    DECISION -->|C >= 0.65| RESCUE[Confirm Survivor & Dispatch Rescue]
+    DECISION -->|C < 0.40| DECOY[Decoy / Heat Bleach: Clear Field]
+    DECISION -->|0.40 <= C < 0.75| DEBATE[NOOA Local SLM & Peer Debate]
+    DECISION -->|C >= 0.75| RESCUE[Confirm Survivor & Dispatch Rescue]
 ```
 
 ### 2. Stigmergic P2P Radio Debate & BFT Consensus Pipeline
@@ -147,7 +149,7 @@ sequenceDiagram
     DroneB->>DroneB: Vector flight to [x, y] & Multi-Angle Scan
     DroneB->>Mesh: Cast Vote: AGREE (Confidence: 88%)
     DroneC->>Mesh: Cast Vote: AGREE (Confidence: 84%)
-    BFT->>BFT: Evaluate BFT Threshold (Votes >= 3f + 1)
+    BFT->>BFT: Evaluate BFT Threshold (Votes >= 2/3 Quorum)
     BFT->>Mesh: Consensus Reached: TARGET CONFIRMED
     Mesh->>DroneA: Transition to SOLIDIFY Regime
 ```
@@ -181,27 +183,26 @@ Protoplasm features a military-grade, reactive tactical operations center built 
 
 For complete mathematical derivations, proofs, ODE/PDE formulations, and Shannon entropy mechanics, see [math_readme.md](math_readme.md).
 
-### 1. Bayesian Perception Layer
-The belief state $b(x_t)$ represents the posterior probability that a survivor is present at spatial coordinate $x_t$ given the history of multi-modal observations $z_{1:t}$:
+### 1. Bayesian Log-Odds Sensor Fusion
+The belief state $b(x_t)$ represents the posterior probability of a human survivor at spatial coordinate $x_t$ given multi-modal evidence:
 
-$$b(x_t) = P(\text{Survivor} \mid z_{1:t}) = \frac{p(z_t \mid x_t) \, b(x_{t-1})}{\int p(z_t \mid x') \, b(x') \, dx'}$$
+$$\text{Log-Odds}_{\text{posterior}} = \text{LOG\_ODDS\_PRIOR} + \sum_{i \in \{\text{camera, audio, thermal}\}} \ln\left(\frac{P(r_i \mid H_1)}{P(r_i \mid H_0)}\right)$$
 
-Multi-modal sensor fusion weights visual ($c_v$), acoustic ($c_a$), and thermal/gas ($c_p$) confidence scores:
+$$\text{Confidence } C = \sigma(\text{Log-Odds}_{\text{posterior}}) = \frac{1}{1 + e^{-\text{Log-Odds}_{\text{posterior}}}}$$
 
-$$C_{\text{fused}} = \Big(w_v c_v + w_a c_a + w_p c_p\Big) \cdot \Phi_{\text{consistency}}$$
+* $\text{LOG\_ODDS\_PRIOR} = \ln(0.10 / 0.90) = -2.20$ (10% sparse target base rate in rubble zones).
+* **Camera (YOLOv8):** Sensitivity $= 0.85$, False Alarm $= 0.08$.
+* **Audio (YAMNet):** Sensitivity $= 0.80$, False Alarm $= 0.15$.
+* **Thermal / Gas:** Sensitivity $= 0.70$, False Alarm $= 0.30$.
 
-$$\Phi_{\text{consistency}} = 1.0 + \gamma \cdot \big(\mathbb{I}_{\{c_v > 0.4 \land c_a > 0.4\}} + \mathbb{I}_{\{c_v > 0.4 \land c_p > 0.4\}}\big)$$
+### 2. Deterministic Action Layer & Multi-Scale Frontier Gradient
+Each drone's instantaneous velocity vector $u_t$ is determined by a deterministic potential field policy coupling spatial entropy reduction with stigmergic attraction:
 
-### 2. Deterministic Action Layer
-Each drone's instantaneous velocity vector $u_t$ is determined by a deterministic gradient policy coupling spatial entropy reduction with stigmergic attraction:
-
-$$u_t = f_{\text{deterministic}}\big(b(x_t), H(b), \nabla S(x_t)\big)$$
-
-$$u_t = v_{\max} \cdot \frac{\alpha \nabla S(x_t) + \beta \nabla H(b) + \mathbf{F}_{\text{repulsive}}}{\|\alpha \nabla S(x_t) + \beta \nabla H(b) + \mathbf{F}_{\text{repulsive}}\|}$$
+$$u_t = v_{\max} \cdot \frac{\alpha \nabla S(x_t) + \beta \nabla H(b) + \mathbf{F}_{\text{dispersion}} + \mathbf{F}_{\text{boundary}}}{\|\alpha \nabla S(x_t) + \beta \nabla H(b) + \mathbf{F}_{\text{dispersion}} + \mathbf{F}_{\text{boundary}}\|}$$
 
 * $\nabla S(x_t)$: Digital pheromone gradient attraction.
-* $\nabla H(b)$: Spatial Shannon entropy reduction gradient (propelling drones into unmapped uncertainty).
-* $\mathbf{F}_{\text{repulsive}}$: Inter-drone collision avoidance force field.
+* $\nabla H(b)$: Multi-scale spatial uncertainty frontier gradient (radii 1 to 6) pulling drones into unmapped Fog of War.
+* $\mathbf{F}_{\text{dispersion}}$: Quadratic inter-drone collision avoidance ($R = 2.8$ grid units).
 
 ### 3. Physics-Informed Neural Network (PINN) PDE
 The digital pheromone field $S(x, t)$ evolves according to the 2D reaction-diffusion-advection partial differential equation:
@@ -214,31 +215,52 @@ $$\mathcal{L}_{\text{PINN}} = \mathcal{L}_{\text{PDE}} + \lambda_{\text{BC}} \ma
 
 ---
 
-## 🚀 Getting Started & How to Launch
+## 📊 Benchmark Results (100-Trial Monte Carlo Evaluation)
 
-### 1. Prerequisites
-* **Python 3.10 to 3.12** installed on your system.
-* **Node.js 18+** and `npm`.
-* (Optional) NVIDIA GPU with CUDA for PINN model retraining.
-
-### 2. Installation
-Clone the repository and install both backend and frontend dependencies:
-
-```bash
-# 1. Clone repository
-git clone https://github.com/PunitRaveendran/Stigmeric_Drone_DSU.git
-cd Stigmeric_Drone_DSU
-
-# 2. Install Python dependencies
-pip install -r requirements.txt
-
-# 3. Install Frontend dependencies
-npm install
-```
+| Metric | 🧫 Protoplasm Swarm | 🏛️ Centralized Greedy | 🚜 Lawnmower Sweep | 🎲 Random Walk |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mission Success Rate** | **99.0%** | 100.0% | 100.0% | 0.0% |
+| **Coverage Efficiency** | **99.85%** | 99.00% | 100.00% | 96.75% |
+| **Localization Accuracy** | **0.78 ± 0.74 cells** | 0.99 ± 0.08 cells | 1.64 ± 0.80 cells | 1.13 ± 0.79 cells |
+| **Detection F1 Score** | **0.99** | 1.00 | 1.00 | 0.30 |
+| **Fault Tolerance (50% Kills)**| **94.0% Success** | 0.0% (SPoF Failure) | Degraded | 0.0% |
+| **False Positive Rejection** | **100% (Decoys Blocked)** | 12.0% False Triggers | 18.0% False Triggers | N/A |
 
 ---
 
-### 3. Launching the Simulation
+## 🚀 Quick Start Guide
+
+### 1. Prerequisites
+* **Python 3.10 – 3.12**
+* **Node.js 18+ & npm**
+* **Git**
+
+### 2. Clone the Repository
+```bash
+git clone https://github.com/PunitRaveendran/Stigmeric_Drone_DSU.git
+cd Stigmeric_Drone_DSU
+```
+
+### 3. Setup Python Backend Environment
+```bash
+# Windows
+python -m venv venv
+.\venv\Scripts\activate
+
+# Linux / macOS
+python3 -m venv venv
+source venv/bin/activate
+
+# Install requirements
+pip install -r requirements.txt
+```
+
+### 4. Install Frontend Dependencies
+```bash
+npm install
+```
+
+### 5. Launching the Simulation
 
 #### Method A: Single-Click Launch (Windows)
 Double-click [`start_all.bat`](start_all.bat) or run it from PowerShell:
@@ -253,7 +275,7 @@ Double-click [`start_all.bat`](start_all.bat) or run it from PowerShell:
 ```powershell
 python src/api_server.py
 ```
-*Initializes PyTorch PINN weights, YOLOv8 visual detector, YAMNet acoustic classifier, and IPv4/IPv6 API endpoints on `http://localhost:8080`.*
+*Initializes PyTorch PINN weights, YOLOv8 visual detector, YAMNet acoustic classifier, and API endpoints on `http://localhost:8080`.*
 
 **Terminal 2 — React Mission Control GUI:**
 ```powershell
@@ -263,25 +285,45 @@ npm run dev
 
 #### Access Mission Control:
 Open your browser and navigate to:
-👉 **[http://localhost:5173](http://localhost:5173)**
+👉 **[http://localhost:5173](http://localhost:5173)** *(or `http://127.0.0.1:5173`)*
+
+---
+
+## ⌨️ Keyboard Shortcuts & HUD Controls
+
+| Key | Action |
+| :--- | :--- |
+| <kbd>Space</kbd> | Toggle Simulation Play / Pause |
+| <kbd>R</kbd> | Reset Mission Simulation |
+| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> / <kbd>4</kbd> | Set Sim Speed to 1×, 2×, 4×, 8× |
+| <kbd>S</kbd> | Toggle MapLibre High-Resolution Satellite Basemap |
+| <kbd>F</kbd> | Toggle Fog of War Exploration Shroud |
+| <kbd>B</kbd> | Toggle Byzantine Fault Tolerance (BFT) Defense |
+| <kbd>O</kbd> | Toggle Ground Truth Zone Overlay |
+| <kbd>C</kbd> | Toggle Peer Debate Dialogue Bubbles |
+| <kbd>`</kbd> (Backquote) | Toggle Bottom Tactical Console Drawer |
+| <kbd>Esc</kbd> | Deselect Selected Drone / Entity |
 
 ---
 
 ## 🧪 Testing & Verification Suite
 
-The repository includes an automated verification test suite validating the ODE/PDE PINN solvers, spatial uncertainty calculations, and Byzantine fault tolerance:
-
 ```bash
-# Run backend validation test suite
+# 1. Run automated Python unit test suite
 python src/test_suite.py
-```
-*Executes all 9 unit and integration tests covering PINN inference, sensor fusion thresholds, and Byzantine peer quarantine.*
 
-```bash
-# Validate frontend production build
+# 2. Run 100-trial Monte Carlo benchmark across all conditions
+node monte_carlo.js
+
+# 3. Verify local NVIDIA Nemotron GGUF SLM consensus
+python src/benchmark_nemotron.py
+
+# 4. Retrain PINN neural models offline
+python src/train_pinns.py
+
+# 5. Validate frontend production build
 npm run build
 ```
-*Verifies clean compilation of all 1,600+ React and MapLibre modules.*
 
 ---
 
@@ -316,7 +358,8 @@ Stigmeric_Drone_DSU/
 │   ├── pinn.js                     # Physics-Informed Neural Network client inference
 │   ├── train_pinns.py              # Offline PyTorch PINN training script
 │   ├── api_server.py               # Python Dual-Stack API & Edge-AI ML inference server
-│   ├── test_suite.py               # Comprehensive 9-test automated validation suite
+│   ├── test_suite.py               # Comprehensive 10-test automated validation suite
+│   ├── benchmark_nemotron.py       # Live local Nemotron GGUF SLM benchmark
 │   ├── human_detector.pt           # YOLOv8 visual human detection model weights
 │   ├── yamnet_binary_final/        # Fine-tuned YAMNet acoustic distress classifier
 │   ├── index.css                   # High-contrast tactical styling & layout design system
@@ -343,6 +386,8 @@ Protoplasm was developed using advanced agentic pair-programming workflows and p
 
 ---
 
-## 📄 License
+## 📄 License & Maintainers
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+* **License:** This project is licensed under the [MIT License](LICENSE).
+* **Lead Maintainers:** Punit Raveendran, Rudra Modi, Rishabh Raj
+* **GitHub Repository:** [`https://github.com/PunitRaveendran/Stigmeric_Drone_DSU`](https://github.com/PunitRaveendran/Stigmeric_Drone_DSU)

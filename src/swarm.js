@@ -189,11 +189,14 @@ export class Swarm {
       // 80/20 Swarm Curiosity Allocation: 20% explorers, 80% convergers
       drone.curiosityRole = (i % 5 === 0) ? 'EXPLORER' : 'CONVERGER';
 
-      // Fan-out initial velocity
-      const angle = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-      drone.vx = Math.cos(angle) * 0.4;
-      drone.vy = Math.sin(angle) * 0.4;
+      // Fan-out initial velocity upward into disaster search bays (-160° to -20°)
+      const fanAngle = -Math.PI * 0.90 + ((i + 0.5) / n) * (Math.PI * 0.80);
+      const jitter = (Math.random() - 0.5) * 0.15;
+      const angle = fanAngle + jitter;
+      drone.vx = Math.cos(angle) * 0.45;
+      drone.vy = Math.sin(angle) * 0.45;
       drone._headingBias = angle;
+      drone._headingAngle = angle;
       this.drones.push(drone);
     }
 
