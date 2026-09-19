@@ -106,11 +106,17 @@ class TestNeuralModelAssets(unittest.TestCase):
     def test_battery_pinn_v3_effect(self):
         """PINN model must exhibit non-linear v^3 power scaling and correct role ordering."""
         import torch
-        from train_pinns import BatteryPINN
+        try:
+            from src.train_pinns import BatteryPINN
+        except ImportError:
+            from train_pinns import BatteryPINN
         base_dir = os.path.dirname(os.path.abspath(__file__))
         model_path = os.path.join(base_dir, "pinn_battery.pt")
         model = BatteryPINN()
-        model.load_state_dict(torch.load(model_path, map_location="cpu"))
+        try:
+            model.load_state_dict(torch.load(model_path, map_location="cpu", weights_only=True))
+        except TypeError:
+            model.load_state_dict(torch.load(model_path, map_location="cpu"))
         model.eval()
 
         def get_drain(v_val, role_idx):
