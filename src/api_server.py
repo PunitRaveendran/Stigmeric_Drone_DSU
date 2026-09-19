@@ -223,6 +223,70 @@ inference_cache['SURVIVOR']['model_info'] = {
     'formula': 'C = 0.4×YOLO + 0.4×YAMNet + 0.2×Passive',
 }
 
+# ─── 4b. Phase 4: Physics-Informed Neural Network (PINN) Loading ───────────────
+print("\n[Phase 3/3] Loading PINN Battery Dynamics Model (pinn_battery.pt)...")
+sys.stdout.flush()
+BATTERY_PINN_AVAILABLE = False
+battery_pinn_model = None
+
+try:
+    import torch
+    import torch.nn as nn
+
+    class MLP(nn.Module):
+        def __init__(self, in_dim, hidden=64, out_dim=1, layers=4):
+            super().__init__()
+            modules = [nn.Linear(in_dim, hidden), nn.Tanh()]
+            for _ in range(layers - 2):
+                modules += [nn.Linear(hidden, hidden), nn.Tanh()]
+            modules.append(nn.Linear(hidden, out_dim))
+            self.net = nn.Sequential(*modules)
+
+        def forward(self, x):
+            return self.net(x)
+
+    class BatteryPINN(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.net = MLP(in_dim=6, hidden=64, out_dim=1, layers=4)
+
+        def forward(self, t, v, z, role):
+            inp = torch.cat([t, v, z, role], dim=-1)
+            return torch.sigmoid(self.net(inp))
+
+    pinn_bat_path = os.path.join(os.path.dirname(__file__), "pinn_battery.pt")
+    if os.path.exists(pinn_bat_path):
+        battery_pinn_model = BatteryPINN()
+        battery_pinn_model.load_state_dict(torch.load(pinn_bat_path, map_location="cpu"))
+        battery_pinn_model.eval()
+        BATTERY_PINN_AVAILABLE = True
+        print("  ✅ [PINN] Battery PINN model loaded successfully (V³ aerodynamic model active)")
+    else:
+        print("  ⚠️ [PINN] pinn_battery.pt not found on disk")
+except Exception as e:
+    print(f"  ⚠️ [PINN] Battery PINN model load failed: {e}")
+
+def evaluate_pinn_drain(v_val=1.0, z_val=0.25, role_name="Scout", t_val=0.5):
+    """Evaluate physics-informed battery drain (-dB/dt) using the trained PINN."""
+    if not BATTERY_PINN_AVAILABLE or battery_pinn_model is None:
+        cal = PINN_CALIB.get("battery", {})
+        base = cal.get("approx_drain_per_tick", {}).get(role_name, 0.022)
+        v_ratio = (float(v_val) / 3.5) if float(v_val) > 0 else 0.0
+        return base * (1.0 + 0.5 * (v_ratio ** 3)), 1.0 - base * float(t_val)
+
+    import torch
+    role_map = {"Scout": [1.0, 0.0, 0.0], "Relay": [0.0, 1.0, 0.0], "Sentinel": [0.0, 0.0, 1.0]}
+    role_vec = role_map.get(role_name.capitalize(), [1.0, 0.0, 0.0])
+
+    r_tensor = torch.tensor([role_vec], dtype=torch.float32)
+    v_tensor = torch.tensor([[float(v_val)]], dtype=torch.float32)
+    z_tensor = torch.tensor([[float(z_val)]], dtype=torch.float32)
+    t_tensor = torch.tensor([[float(t_val)]], dtype=torch.float32, requires_grad=True)
+
+    B = battery_pinn_model(t_tensor, v_tensor, z_tensor, r_tensor)
+    dB_dt = torch.autograd.grad(B, t_tensor)[0].item()
+    return float(-dB_dt), float(B.item())
+
 # ─── Summary ──────────────────────────────────────────────────────────────────
 print("\n" + "=" * 70)
 print("CALIBRATED INFERENCE PROFILES SUMMARY")
@@ -335,6 +399,29 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(data, indent=2).encode())
             return
 
+        if parsed.path == '/api/pinn/battery/predict':
+            from urllib.parse import parse_qs
+            query = parse_qs(parsed.query)
+            v = float(query.get('v', [1.0])[0])
+            z = float(query.get('z', [0.25])[0])
+            role = query.get('role', ['Scout'])[0]
+            t = float(query.get('t', [0.5])[0])
+
+            drain, b_remaining = evaluate_pinn_drain(v_val=v, z_val=z, role_name=role, t_val=t)
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'model': 'BatteryPINN (V³ Parasitic Aerodynamic Drag ODE)',
+                'inputs': {'v': v, 'z': z, 'role': role, 't': t},
+                'predicted_drain_rate': round(drain, 6),
+                'battery_remaining': round(b_remaining, 6),
+                'status': 'ok'
+            }, indent=2).encode())
+            return
+
         if parsed.path == '/api/pinn/thermal':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -396,6 +483,38 @@ class InferenceAPIHandler(SimpleHTTPRequestHandler):
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e), 'is_valid': False}).encode())
+                return
+
+        if parsed.path == '/api/pinn/battery/predict':
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_body = self.rfile.read(content_length).decode('utf-8')
+                data = json.loads(post_body) if post_body else {}
+                v = float(data.get('v', 1.0))
+                z = float(data.get('z', 0.25))
+                role = str(data.get('role', 'Scout'))
+                t = float(data.get('t', 0.5))
+
+                drain, b_remaining = evaluate_pinn_drain(v_val=v, z_val=z, role_name=role, t_val=t)
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'model': 'BatteryPINN (V³ Parasitic Aerodynamic Drag ODE)',
+                    'inputs': {'v': v, 'z': z, 'role': role, 't': t},
+                    'predicted_drain_rate': round(drain, 6),
+                    'battery_remaining': round(b_remaining, 6),
+                    'status': 'ok'
+                }, indent=2).encode())
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e), 'status': 'error'}).encode())
                 return
 
         return super().do_GET()

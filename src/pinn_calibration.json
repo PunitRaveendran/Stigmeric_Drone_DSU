@@ -10,12 +10,23 @@
       "Relay",
       "Sentinel"
     ],
+    "v_ref": 3.5,
+    "k_aero": 0.012,
+    "k_hover": 0.014,
+    "k_alt": 0.004,
+    "payload_power": {
+      "Scout": 0.008,
+      "Relay": 0.012,
+      "Sentinel": 0.002,
+      "Default": 0.006
+    },
     "approx_drain_per_tick": {
       "Scout": 0.028,
       "Relay": 0.031,
       "Sentinel": 0.011,
       "default": 0.022
-    }
+    },
+    "v3_aerodynamic_model": true
   },
   "thermal": {
     "k_debris": 0.045,
