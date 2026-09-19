@@ -30,39 +30,39 @@ import { getPINNBatteryDrain } from './pinn.js';
 const REGIME_PARAMS = {
   SPREAD: {
     gradientPull:  0.0,    // Pure exploration: ignore weak trails to prevent circular tail-chasing
-    randomWeight:  0.35,   // Smooth tactical search wandering
-    speed:         0.54,   // Realistic tactical cruise thrust (~5.5 - 7.0 m/s / 20 - 25 km/h)
-    depositAmount: 0.02,   // Light exploration trail
-    stepScale:     0.28,   // Physical step scaling for ~5.8 m/s ground speed
-    turnRate:      0.020,  // Smooth aerodynamic sweeping arcs
-    inertia:       0.82,   // High forward momentum across search bays
+    randomWeight:  0.40,   // smooth wander
+    speed:         0.36,   // brisk sweeping speed
+    depositAmount: 0.02,   // light trail
+    stepScale:     0.18,   // smooth step scale
+    turnRate:      0.015,  // gentle turns — eliminates tight spinning circles
+    inertia:       0.80,   // high forward momentum across grid sectors
   },
   CONVERGE: {
-    gradientPull:  0.80,   // Strong attraction toward survivor candidate
-    randomWeight:  0.15,   // Focused deceleration toward target
-    speed:         0.32,   // Slow survey speed (~2.0 - 3.0 m/s) as swarm re-verifies
-    depositAmount: 0.12,   // Heavy trail reinforcement
-    stepScale:     0.15,
-    turnRate:      0.035,
-    inertia:       0.74,
+    gradientPull:  0.80,   // strong attraction toward survivor signal center
+    randomWeight:  0.20,   // focused movement toward target
+    speed:         0.20,   // slowing down as swarm re-verifies
+    depositAmount: 0.12,   // heavy trail reinforcement
+    stepScale:     0.09,
+    turnRate:      0.03,
+    inertia:       0.72,
   },
   SOLIDIFY: {
-    gradientPull:  0.95,   // Lock onto survivor center
-    randomWeight:  0.05,   // Minimal wander — swarm holds position
-    speed:         0.10,   // Station-keeping hover over target (<0.5 m/s)
-    depositAmount: 0.20,   // Intense trail lock
-    stepScale:     0.05,
+    gradientPull:  0.95,   // lock onto survivor center
+    randomWeight:  0.05,   // minimal wander — swarm holds position
+    speed:         0.12,   // slow hover over target
+    depositAmount: 0.20,   // intense trail lock
+    stepScale:     0.07,
     turnRate:      0.01,
     inertia:       0.85,
   },
   RESCUED: {
     gradientPull:  0.0,
     randomWeight:  0.0,
-    speed:         0.50,   // Rapid transit RTL speed (~4.8 - 5.5 m/s)
-    depositAmount: 0.0,   // No pheromone deposit during RTL flight
-    stepScale:     0.25,
-    turnRate:      0.025,
-    inertia:       0.82,
+    speed:         0.32,   // transit RTL speed
+    depositAmount: 0.0,   // no pheromone deposit during RTL flight
+    stepScale:     0.13,
+    turnRate:      0.02,
+    inertia:       0.80,
   },
 };
 
@@ -332,11 +332,10 @@ export class Drone {
     this.viscosity = computeViscosity(this.uncertainty, this.confidence);
     this.regime    = classifyRegime(this.viscosity);
 
-    // Battery discharge governed by PINN aerodynamic V^3 & role payload ODE
-    const drain = getPINNBatteryDrain(this.role, this.currentSpeed, this.altitude);
+    // Battery discharge governed by PINN aerodynamic & role payload ODE
+    const drain = getPINNBatteryDrain(this.role);
     if (tick % 30 === 0 && this.battery > 5) {
-      const safeDrain = Math.max(0, drain);
-      this.batteryFloat = Math.max(5, this.batteryFloat - safeDrain);
+      this.batteryFloat = Math.max(5, this.batteryFloat - drain);
       this.battery = Math.round(this.batteryFloat);
     }
   }
@@ -437,36 +436,40 @@ export class Drone {
     }
 
     // Standard / Helper drone movement:
-    // Update heading smoothly with slight persistent wandering (prevent tight circular spins)
-    this._headingBias += (Math.random() - 0.5) * params.turnRate;
+    // Rotate heading bias — rate controls how erratically drones change direction
+    this._headingBias += (Math.random() - 0.5) * 2 * params.turnRate;
 
-    // Base forward cruise vector along heading bias
+    // Random walk direction from current heading
     let rx = Math.cos(this._headingBias) * params.randomWeight;
     let ry = Math.sin(this._headingBias) * params.randomWeight;
 
-    // ALL drones pull toward spatial uncertainty gradients to guarantee full map coverage
+    // ALL drones pull toward spatial uncertainty gradients to guarantee map coverage
     if (this.regime === 'SPREAD') {
       const uGrad = field.getUncertaintyGradient(col, row);
-      const strength = this.curiosityRole === 'EXPLORER' ? 1.10 : 0.65;
+      const strength = this.curiosityRole === 'EXPLORER' ? 0.95 : 0.45;
       rx += uGrad.dx * strength;
       ry += uGrad.dy * strength;
     }
 
-    // Inter-Drone Collision Avoidance & Dispersion (expanded bubble for clean swarm spacing)
+    // Inter-Drone Collision Avoidance & Dispersion Repulsion (prevents drone clustering)
     let repDroneX = 0;
     let repDroneY = 0;
     if (swarmContext.drones && swarmContext.drones.length > 1) {
-      const safetyRadius = 2.8; // expanded dispersion bubble
+      const safetyRadius = 2.5; // expanded dispersion bubble in grid units
       for (const other of swarmContext.drones) {
         if (other.id === this.id) continue;
+        // Drones at different flight altitudes (>= 5m diff) can safely overlap at different heights
+        const altDiff = Math.abs(this.altitude - other.altitude);
+        if (altDiff >= 5) continue;
+
         const dx = this.x - other.x;
         const dy = this.y - other.y;
         const distSq = dx * dx + dy * dy;
         const dist = Math.sqrt(distSq);
 
         if (dist > 1e-4 && dist < safetyRadius) {
-          const overlap = (safetyRadius - dist) / safetyRadius;
-          const force = overlap * 0.70; // active dispersion pushing drones into separate lanes
+          const overlap = (safetyRadius - dist) / safetyRadius; // 0 to 1
+          const force = overlap * 0.65; // firm repulsion pushes drones to explore separate sectors
           repDroneX += (dx / dist) * force;
           repDroneY += (dy / dist) * force;
         }
@@ -479,6 +482,7 @@ export class Drone {
         if (droneId !== this.id) {
           const [sc, sr] = key.split(',').map(Number);
           if (!field.securedCells || !field.securedCells.has(sr * field.cols + sc)) {
+            // Count how many drones are already near this sentinel
             let nearbyCount = 0;
             for (const other of swarmContext.drones) {
               if (other.id !== this.id && Math.hypot(other.x - (sc + 0.5), other.y - (sr + 0.5)) <= 3.5) {
@@ -491,26 +495,29 @@ export class Drone {
             const dist = Math.hypot(dx, dy);
 
             if (nearbyCount < 4 && dist > 1.5 && dist <= 8.0) {
-              const pull = ((8.0 - dist) / 8.0) * 0.45;
-              rx += (dx / dist) * pull;
-              ry += (dy / dist) * pull;
+              // Still need more verifiers — attract
+              const pull = ((8.0 - dist) / 8.0) * 0.55;
+                rx += (dx / dist) * pull;
+                ry += (dy / dist) * pull;
             } else if (nearbyCount >= 4 && dist <= 4.0 && dist > 0.5) {
-              const push = ((4.0 - dist) / 4.0) * 0.50;
-              rx -= (dx / dist) * push;
-              ry -= (dy / dist) * push;
+              // Enough verifiers already — push excess drones outward to search elsewhere
+              const push = ((4.0 - dist) / 4.0) * 0.70;
+                rx -= (dx / dist) * push;
+                ry -= (dy / dist) * push;
+              }
             }
           }
         }
       }
-    }
 
     // Unrescued Target Attraction: pull idle drones toward survivors that still need discovery
     if (swarmContext.unrescuedTargets && swarmContext.unrescuedTargets.length > 0) {
+      // Find nearest unrescued target that does NOT already have a sentinel
       let bestDx = 0, bestDy = 0, bestDist = Infinity;
       for (const tgt of swarmContext.unrescuedTargets) {
         const tKey = `${tgt.col},${tgt.row}`;
         const hasSentinel = swarmContext.activeSentinels && swarmContext.activeSentinels.has(tKey);
-        if (hasSentinel) continue;
+        if (hasSentinel) continue; // skip targets that already have a sentinel — they'll attract their own helpers
         const dx = (tgt.col + 0.5) - this.x;
         const dy = (tgt.row + 0.5) - this.y;
         const dist = Math.hypot(dx, dy);
@@ -520,6 +527,7 @@ export class Drone {
           bestDy = dy;
         }
       }
+      // Gentle pull toward nearest unrescued unsupervised target (only when far away)
       if (bestDist > 3.0 && bestDist < 25.0) {
         const pull = 0.25;
         rx += (bestDx / bestDist) * pull;
@@ -527,7 +535,7 @@ export class Drone {
       }
     }
 
-    // Extracted Target Repulsion: gentle push AWAY from already-rescued sectors
+    // Extracted Target Repulsion: gentle push AWAY from already-rescued sectors (radius 3.5)
     let repSecuredX = 0;
     let repSecuredY = 0;
     if (swarmContext.rescuedCells && swarmContext.rescuedCells.size > 0) {
@@ -536,9 +544,9 @@ export class Drone {
         const dx = (this.x - (sc + 0.5));
         const dy = (this.y - (sr + 0.5));
         const distSq = dx * dx + dy * dy;
-        if (distSq < 12.25) {
+        if (distSq < 12.25) { // within 3.5 cells of extracted target
           const dist = Math.sqrt(distSq) || 1;
-          const force = ((3.5 - dist) / 3.5) * 0.50;
+          const force = ((3.5 - dist) / 3.5) * 0.65; // gentle local push
           repSecuredX += (dx / dist) * force;
           repSecuredY += (dy / dist) * force;
         }
@@ -550,114 +558,69 @@ export class Drone {
     const gx   = grad.dx * params.gradientPull;
     const gy   = grad.dy * params.gradientPull;
 
-    // Smooth aerodynamic boundary steering with corner escape routing
+    // Inward soft boundary potential field (steers drones away from borders BEFORE wall collision)
     let bSteerX = 0;
     let bSteerY = 0;
-    const bMargin = 1.6;
-    const nearLeft   = this.x < bMargin;
-    const nearRight  = this.x > field.cols - bMargin;
-    const nearTop    = this.y < bMargin;
-    const nearBottom = this.y > field.rows - bMargin;
+    const bMargin = 1.5; // small margin — just enough to prevent wall collision, not block entire bottom region
+    if (this.x < bMargin)              bSteerX += (bMargin - this.x) * 2.5;
+    if (this.x > field.cols - bMargin) bSteerX -= (this.x - (field.cols - bMargin)) * 2.5;
+    if (this.y < bMargin)              bSteerY += (bMargin - this.y) * 2.5;
+    if (this.y > field.rows - bMargin) bSteerY -= (this.y - (field.rows - bMargin)) * 2.5;
 
-    // Corner diagonal deflection (prevents corner traps)
-    if ((nearLeft || nearRight) && (nearTop || nearBottom)) {
-      const centerX = field.cols * 0.5;
-      const centerY = field.rows * 0.5;
-      const cdx = centerX - this.x;
-      const cdy = centerY - this.y;
-      const cdist = Math.hypot(cdx, cdy) || 1;
-      bSteerX = (cdx / cdist) * 0.90;
-      bSteerY = (cdy / cdist) * 0.90;
-    } else {
-      if (nearLeft)   bSteerX += Math.pow((bMargin - this.x) / bMargin, 1.4) * 0.75;
-      if (nearRight)  bSteerX -= Math.pow((this.x - (field.cols - bMargin)) / bMargin, 1.4) * 0.75;
-      if (nearTop)    bSteerY += Math.pow((bMargin - this.y) / bMargin, 1.4) * 0.75;
-      if (nearBottom) bSteerY -= Math.pow((this.y - (field.rows - bMargin)) / bMargin, 1.4) * 0.75;
-    }
+    // NOTE: Center pull removed — it biases drones away from the bottom half of the map where the spawn base is.
 
-    // Combine all steering forces
+    // Combine random walk + gradient + same-altitude gentle repulsion + secured repulsion + inward boundary steering
     let nx = gx + rx + repDroneX + repSecuredX + bSteerX;
     let ny = gy + ry + repDroneY + repSecuredY + bSteerY;
-
-    // Anti-Stuck / Anti-Deadlock Escape Vector
-    // If a drone has moved very little over the last 15 frames while in SPREAD, give an escape kick
-    const moveDist = Math.hypot(this.x - (this._lastSampleX || this.x), this.y - (this._lastSampleY || this.y));
-    this._stuckTimer = (this._stuckTimer || 0) + 1;
-    if (this._stuckTimer >= 15) {
-      if (moveDist < 0.30 && this.regime === 'SPREAD') {
-        // Pick an escape heading toward map center or open frontier
-        const uGrad = field.getUncertaintyGradient(col, row);
-        const escapeAngle = (Math.abs(uGrad.dx) > 0.1 || Math.abs(uGrad.dy) > 0.1)
-          ? Math.atan2(uGrad.dy, uGrad.dx)
-          : Math.random() * Math.PI * 2;
-        this._headingBias = escapeAngle;
-        this._headingAngle = escapeAngle;
-        this.vx = Math.cos(escapeAngle) * params.speed;
-        this.vy = Math.sin(escapeAngle) * params.speed;
-      }
-      this._lastSampleX = this.x;
-      this._lastSampleY = this.y;
-      this._stuckTimer = 0;
-    }
-
     const mag = Math.sqrt(nx * nx + ny * ny);
-    if (mag > 1.0) { nx /= mag; ny /= mag; }
+    if (mag > 1e-6) { nx /= mag; ny /= mag; }
 
-    // Apply velocity with inertia for silky smooth UAV dynamics
-    const targetVx = nx * params.speed;
-    const targetVy = ny * params.speed;
-    this.vx = params.inertia * this.vx + (1 - params.inertia) * targetVx;
-    this.vy = params.inertia * this.vy + (1 - params.inertia) * targetVy;
+    // Apply velocity with inertia
+    this.vx = params.inertia * this.vx + (1 - params.inertia) * nx * params.speed;
+    this.vy = params.inertia * this.vy + (1 - params.inertia) * ny * params.speed;
 
-    // In SPREAD mode, enforce minimum cruising speed so search drones never stall
-    let spd = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (this.regime === 'SPREAD') {
-      const minSpd = params.speed * 0.60;
-      if (spd < minSpd) {
-        const boostHeading = (spd >= 0.02) ? Math.atan2(this.vy, this.vx) : this._headingBias;
-        this.vx = Math.cos(boostHeading) * minSpd;
-        this.vy = Math.sin(boostHeading) * minSpd;
-        spd = minSpd;
-      }
-    }
-
-    // Speed clamping
-    const maxSpd = params.speed * 0.90;
+    // Clamp speed
+    const spd    = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    const maxSpd = params.speed * 0.85;
     if (spd > maxSpd) {
       this.vx = (this.vx / spd) * maxSpd;
       this.vy = (this.vy / spd) * maxSpd;
     }
 
-    // Smooth heading angle update
+    // Smooth heading angle update & sync heading bias to prevent circular spinning loops
     if (spd >= 0.02) {
       const targetHeading = Math.atan2(this.vy, this.vx);
-      this._headingAngle = lerpAngle(this._headingAngle, targetHeading, 0.20);
-      this._headingBias = lerpAngle(this._headingBias, this._headingAngle, 0.10);
+      this._headingAngle = lerpAngle(this._headingAngle, targetHeading, 0.25);
+      // Smoothly pull heading bias back toward actual flight trajectory
+      this._headingBias = lerpAngle(this._headingBias, this._headingAngle, 0.15);
     }
 
     // Compute next position
     let newX = this.x + this.vx * params.stepScale;
     let newY = this.y + this.vy * params.stepScale;
 
-    // Hard boundary safety clamp (with gentle soft deflection)
-    const minB = 0.6;
-    const maxBX = field.cols - 0.6;
-    const maxBY = field.rows - 0.6;
+    // Boundary hard clamp & smooth composite reflection
+    const minB = 0.8;
+    const maxBX = field.cols - 0.8;
+    const maxBY = field.rows - 0.8;
+    let hitWall = false;
 
-    if (newX < minB)  { newX = minB;  this.vx =  Math.abs(this.vx) * 0.5; }
-    if (newX > maxBX) { newX = maxBX; this.vx = -Math.abs(this.vx) * 0.5; }
-    if (newY < minB)  { newY = minB;  this.vy =  Math.abs(this.vy) * 0.5; }
-    if (newY > maxBY) { newY = maxBY; this.vy = -Math.abs(this.vy) * 0.5; }
+    if (newX < minB)  { newX = minB;  this.vx =  Math.abs(this.vx) * 0.4; hitWall = true; }
+    if (newX > maxBX) { newX = maxBX; this.vx = -Math.abs(this.vx) * 0.4; hitWall = true; }
+    if (newY < minB)  { newY = minB;  this.vy =  Math.abs(this.vy) * 0.4; hitWall = true; }
+    if (newY > maxBY) { newY = maxBY; this.vy = -Math.abs(this.vy) * 0.4; hitWall = true; }
 
-    // Update position
+    if (hitWall) {
+      const inwardAngle = Math.atan2(this.vy, this.vx);
+      this._headingAngle = lerpAngle(this._headingAngle, inwardAngle, 0.40);
+      this._headingBias  = lerpAngle(this._headingBias,  inwardAngle, 0.40);
+    }
+
+    // Snapshot prev position for frame interpolation
     this.prevX = this.x;
     this.prevY = this.y;
-    this.x = newX;
-    this.y = newY;
-    this.col = Math.floor(this.x);
-    this.row = Math.floor(this.y);
 
-    // Record trail
+    // Record trail BEFORE moving
     this.trail.push({ x: this.x, y: this.y });
     if (this.trail.length > this.maxTrailLength) this.trail.shift();
 

@@ -10,8 +10,6 @@
 
 import { Drone } from './drone.js';
 import { getLinkQuality, shouldDeliver, getAvgLinkQuality, RADIO_RANGE } from './comms.js';
-import { beeceptor } from './beeceptor.js';
-import { n8nGateway } from './n8n.js';
 
 export class Swarm {
   /**
@@ -45,34 +43,12 @@ export class Swarm {
         quarantinedCount: 0,
         defenseActive: true,
       },
-      // Multi-Agent Debate Tracking
-      debateStats: {
-        proposals: 0,
-        agrees: 0,
-        rejects: 0,
-        consensusConfirmed: 0,
-      },
-      // NOAA Agent Negotiation Tracking
-      nooaStats: {
-        accessCount: 0,
-        successCount: 0,
-        lastDecision: 'IDLE',
-      },
-      // Relay Mesh Network Stats
-      relayStats: {
-        activeRelays: 0,
-        packetsRelayed: 0,
-      },
     };
 
     // ═══ CYBER-PHYSICAL SECURITY & BYZANTINE FAULT TOLERANCE ═════════════════
     this.byzantineDefenseEnabled = true;
     this.quarantinedDrones = new Set();
     this.securityStats = this.stats.securityStats;
-    this.debateStats = this.stats.debateStats;
-    this.debateFeed = [];
-    this.nooaStats = this.stats.nooaStats;
-    this.relayStats = this.stats.relayStats;
 
     // Zone presence — how many drones are currently in each zone type
     // Used by the narrative panel to show "X drones near SURVIVOR zone"
@@ -122,7 +98,6 @@ export class Swarm {
     }
     if (!target) return;
     target.isRogue = true;
-    target.spoofTicks = 0;
     this.securityStats.rogueCount = this.drones.filter(d => d.isRogue).length;
     this._addEvent('🔴', `[SECURITY ALERT] Drone #${target.id} (${target.callsign}) COMPROMISED! Injected with Byzantine exploit. Broadcasting forged ghost targets.`);
   }
@@ -189,14 +164,11 @@ export class Swarm {
       // 80/20 Swarm Curiosity Allocation: 20% explorers, 80% convergers
       drone.curiosityRole = (i % 5 === 0) ? 'EXPLORER' : 'CONVERGER';
 
-      // Fan-out initial velocity upward into disaster search bays (-160° to -20°)
-      const fanAngle = -Math.PI * 0.90 + ((i + 0.5) / n) * (Math.PI * 0.80);
-      const jitter = (Math.random() - 0.5) * 0.15;
-      const angle = fanAngle + jitter;
-      drone.vx = Math.cos(angle) * 0.45;
-      drone.vy = Math.sin(angle) * 0.45;
+      // Fan-out initial velocity
+      const angle = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      drone.vx = Math.cos(angle) * 0.4;
+      drone.vy = Math.sin(angle) * 0.4;
       drone._headingBias = angle;
-      drone._headingAngle = angle;
       this.drones.push(drone);
     }
 
@@ -233,7 +205,6 @@ export class Swarm {
     this._droneIdCounter = 0;
     this._prevDominant = 'SPREAD';
     this._seenDispatch = new Set();
-    this._seenTargetDispatch = new Set();
     this.dispatchLog = [];
     this.eventLog = [];
     this.solidifyTicks = 0;
@@ -268,27 +239,9 @@ export class Swarm {
         quarantinedCount: 0,
         defenseActive: this.byzantineDefenseEnabled,
       },
-      debateStats: {
-        proposals: 0,
-        agrees: 0,
-        rejects: 0,
-        consensusConfirmed: 0,
-      },
-      nooaStats: {
-        accessCount: 0,
-        successCount: 0,
-        lastDecision: 'IDLE',
-      },
-      relayStats: {
-        activeRelays: 0,
-        packetsRelayed: 0,
-      },
     };
     this.quarantinedDrones.clear();
     this.securityStats = this.stats.securityStats;
-    this.debateStats = this.stats.debateStats;
-    this.nooaStats = this.stats.nooaStats;
-    this.relayStats = this.stats.relayStats;
     this._activeNOOASectors.clear();
     this._nooaInFlightCount = 0;
     this.field.reset();
@@ -479,31 +432,6 @@ export class Swarm {
             confidence: drone.confidence.toFixed(3),
           });
           this._addEvent('🚨', `Rescue dispatch! Survivor confirmed at sector (${drone.col},${drone.row})`);
-
-          // Trigger Autonomous n8n First-Responder Dispatch Workflow
-          n8nGateway.triggerSARDispatch({
-            col: drone.col,
-            row: drone.row,
-            confidence: drone.confidence,
-            readings: drone.lastReadings,
-            leadAgent: drone.callsign,
-          }).then((res) => {
-            const unit = res?.assigned_unit || 'PARAMEDIC-UNIT-04 (DISPATCHED)';
-            const eta = res?.eta_minutes || res?.estimated_arrival_minutes || 3.8;
-            const priority = res?.priority || 'CODE RED (CRITICAL)';
-            this._addEvent('⚡', `[n8n DISPATCH] ${unit} en route to (${drone.col},${drone.row}) — ETA ${eta}m`);
-            if (typeof window !== 'undefined' && typeof window.showN8nDispatchToast === 'function') {
-              window.showN8nDispatchToast({
-                targetName: `SURVIVOR-ALPHA (${drone.col},${drone.row})`,
-                col: drone.col,
-                row: drone.row,
-                confidence: (drone.confidence * 100).toFixed(1),
-                unit: unit,
-                eta: eta,
-                priority: priority,
-              });
-            }
-          });
         }
       }
     }
@@ -520,28 +448,24 @@ export class Swarm {
 
       // ═══ BYZANTINE FAULT TOLERANCE: Blacklist Quarantine ═══
       if (this.byzantineDefenseEnabled && sender.isQuarantined) {
-        this.securityStats.attacksAttempted += sender.outbox.length;
         this.securityStats.attacksBlocked += sender.outbox.length;
         sender.outbox = [];
         continue;
       }
 
       for (const msg of sender.outbox) {
-        const actualType = (msg.col !== undefined && msg.row !== undefined)
-          ? this.sensors.scenario.getCellType(msg.col, msg.row)
-          : null;
-        const isRealSurvivor = (actualType === 'SURVIVOR');
-
-        // Track attack metrics: forged candidate proposals or rogue spoofing at non-survivor cells
-        const isMalicious = msg.isForged || (sender.isRogue && msg.type === 'CANDIDATE_PROPOSAL' && !isRealSurvivor && msg.confidence >= 0.70);
-        if (isMalicious) {
+        // Track attack metrics
+        if (sender.isRogue || msg.isForged) {
           this.securityStats.attacksAttempted++;
         }
 
         // ═══ BYZANTINE SPOOFING DETECTION & QUARANTINE ═══
         if (msg.type === 'CANDIDATE_PROPOSAL' && this.byzantineDefenseEnabled) {
-          // Adversarial check: forged Byzantine payload or claiming high confidence at a non-survivor cell
-          if (msg.isForged || (!isRealSurvivor && msg.confidence >= 0.70)) {
+          const actualType = this.sensors.scenario.getCellType(msg.col, msg.row);
+          const isRealSurvivor = (actualType === 'SURVIVOR');
+
+          // Adversarial check: claiming high confidence at an empty/rubble/hazard cell
+          if (!isRealSurvivor && (msg.confidence >= 0.70 || msg.isForged)) {
             sender.securityViolations = (sender.securityViolations || 0) + 1;
 
             // Multi-agent peer trust slashing across all honest peers
@@ -562,46 +486,11 @@ export class Swarm {
             }
 
             this.securityStats.attacksBlocked++;
-            if (!this.debateFeed) this.debateFeed = [];
-            this.debateFeed.unshift({
-              id: `byz-${this.tick}-${sender.id}-${Date.now()}`,
-              type: 'byzantine',
-              callsign: sender.callsign,
-              icon: '🛡️',
-              badge: 'BFT BLOCKED',
-              coords: `(${msg.col}, ${msg.row})`,
-              text: `[BFT SPOOF BLOCKED] ${sender.callsign} broadcast forged C=${(msg.confidence * 100).toFixed(0)}% at (${msg.col},${msg.row}). Honest peers rejected spoof. Node quarantined.`,
-              confidence: msg.confidence,
-              tick: this.tick,
-              time: new Date().toLocaleTimeString(),
-            });
-            if (this.debateFeed.length > 200) this.debateFeed.pop();
             continue; // Drop the spoofed proposal — do not route to honest peers!
           }
         }
 
         // Deliver to all drones within radio range
-        if (msg.type === 'CANDIDATE_PROPOSAL') {
-          this.debateStats.proposals++;
-          if (!this.debateFeed) this.debateFeed = [];
-          this.debateFeed.unshift({
-            id: `prop-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
-            type: 'proposal',
-            callsign: sender.callsign,
-            icon: '📢',
-            badge: 'PROPOSAL',
-            coords: `(${msg.col}, ${msg.row})`,
-            confidence: msg.confidence,
-            text: `${sender.callsign} broadcast candidate C=${(msg.confidence * 100).toFixed(0)}% at (${msg.col},${msg.row}). Requesting peer vote verification.`,
-            tick: this.tick,
-            time: new Date().toLocaleTimeString(),
-          });
-          if (this.debateFeed.length > 200) this.debateFeed.pop();
-        }
-        if (sender.role === 'RELAY') {
-          this.relayStats.packetsRelayed++;
-        }
-
         for (const receiver of this.drones) {
           if (receiver.id === sender.id) continue;
           // Self-healing: probabilistic link quality gate replaces hard distance check
@@ -676,73 +565,23 @@ export class Swarm {
 
         // Log debate votes and consensus to event feed
         if (msg.type === 'VOTE_CAST') {
-          if (msg.vote === 'AGREE') {
-            this.debateStats.agrees++;
-          } else if (msg.vote === 'REJECT') {
-            this.debateStats.rejects++;
-          }
           const emoji = msg.vote === 'AGREE' ? '✅ YES' : '❌ NO';
           const headingDeg = Math.round((msg.heading * 180 / Math.PI + 360) % 360);
-          const reasoning = msg.vote === 'AGREE'
-            ? `YOLO Camera + YAMNet Audio confirmed at ${(msg.confidence * 100).toFixed(0)}%`
-            : `Single-channel bias only — cross-sensor mismatch from ${headingDeg}° angle`;
-
-          if (!this.debateFeed) this.debateFeed = [];
-          this.debateFeed.unshift({
-            id: `vote-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
-            type: msg.vote === 'AGREE' ? 'agree' : 'reject',
-            callsign: sender.callsign,
-            icon: emoji,
-            badge: msg.vote === 'AGREE' ? 'VOTE: AGREE' : 'VOTE: REJECT',
-            coords: `(${msg.targetCol}, ${msg.targetRow})`,
-            confidence: msg.confidence,
-            text: `${sender.callsign} [${headingDeg}° angle] voted ${msg.vote} @ (${msg.targetCol},${msg.targetRow}): "${reasoning}"`,
-            tick: this.tick,
-            time: new Date().toLocaleTimeString(),
-          });
-          if (this.debateFeed.length > 200) this.debateFeed.pop();
-
           const debateKey2 = `vote-${msg.callsign}-${msg.targetCol},${msg.targetRow}`;
           if (!this._debateLogThrottle.has(debateKey2)) {
             this._debateLogThrottle.add(debateKey2);
+            const reasoning = msg.vote === 'AGREE'
+              ? `YOLO Camera + YAMNet Audio alignment confirmed at ${(msg.confidence * 100).toFixed(0)}% confidence`
+              : `Single-channel bias only — camera/audio missing from ${headingDeg}° approach angle`;
             this._addEvent(emoji, `Agent ${msg.callsign} [${headingDeg}° angle] votes ${msg.vote} @ (${msg.targetCol},${msg.targetRow}): "${reasoning}"`);
           }
         } else if (msg.type === 'CONSENSUS_CONFIRMED') {
-          this.debateStats.consensusConfirmed++;
-          if (!this.debateFeed) this.debateFeed = [];
-          this.debateFeed.unshift({
-            id: `conf-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
-            type: 'consensus',
-            callsign: sender.callsign,
-            icon: '🏛️',
-            badge: 'CONSENSUS REACHED',
-            coords: `(${msg.col}, ${msg.row})`,
-            text: `CONSENSUS CONFIRMED @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT. Target verified! Dispatching rescue.`,
-            tick: this.tick,
-            time: new Date().toLocaleTimeString(),
-          });
-          if (this.debateFeed.length > 200) this.debateFeed.pop();
-
           const debateKey3 = `consensus-${msg.col},${msg.row}`;
           if (!this._debateLogThrottle.has(debateKey3)) {
             this._debateLogThrottle.add(debateKey3);
             this._addEvent('🏛️', `DEBATE CONSENSUS @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT → Agent ${msg.callsign}: "Multi-agent consensus reached! Survivor confirmed. Requesting extraction."`);
           }
         } else if (msg.type === 'CONSENSUS_REJECTED') {
-          if (!this.debateFeed) this.debateFeed = [];
-          this.debateFeed.unshift({
-            id: `rej-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
-            type: 'reject',
-            callsign: sender.callsign,
-            icon: '🙅',
-            badge: 'DECOY REJECTED',
-            coords: `(${msg.col}, ${msg.row})`,
-            text: `CONSENSUS REJECTED @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT. Decoy anomaly dismissed. Clearing trail.`,
-            tick: this.tick,
-            time: new Date().toLocaleTimeString(),
-          });
-          if (this.debateFeed.length > 200) this.debateFeed.pop();
-
           const debateKey4 = `rejected-${msg.col},${msg.row}`;
           if (!this._debateLogThrottle.has(debateKey4)) {
             this._debateLogThrottle.add(debateKey4);
@@ -753,9 +592,6 @@ export class Swarm {
       }
       sender.outbox = [];
     }
-
-    // Update active relays count
-    this.relayStats.activeRelays = this.drones.filter(d => d.role === 'RELAY').length;
 
     // Process vote messages received in second pass
     for (const drone of this.drones) {
@@ -850,42 +686,6 @@ export class Swarm {
         if (targetConf >= 0.60 || (localDrones >= 2 && minDist <= 3.0)) {
           st.status = 'RESCUE_DISPATCH';
           st.solidifyTicks = (st.solidifyTicks || 0) + 1;
-
-          // Trigger Autonomous n8n First-Responder Dispatch Workflow when target is first locked
-          if (!this._seenTargetDispatch) this._seenTargetDispatch = new Set();
-          if (!this._seenTargetDispatch.has(cellKey)) {
-            this._seenTargetDispatch.add(cellKey);
-            this.dispatchLog.push({
-              tick: this.tick, col: st.col, row: st.row,
-              confidence: st.confidence.toFixed(3),
-            });
-            this._addEvent('🚨', `Rescue dispatch! Survivor ${st.name} confirmed at sector (${st.col},${st.row})`);
-
-            n8nGateway.triggerSARDispatch({
-              col: st.col,
-              row: st.row,
-              confidence: st.confidence,
-              name: st.name,
-              readings: { camera: 0.92, audio: 0.88, thermal: 0.85, gas: 0.05 },
-              leadAgent: `SWARM-AGENT-0${Math.floor(Math.random() * 5 + 1)}`,
-            }).then((res) => {
-              const unit = res?.assigned_unit || 'PARAMEDIC-UNIT-04 (DISPATCHED)';
-              const eta = res?.eta_minutes || res?.estimated_arrival_minutes || 3.8;
-              const priority = res?.priority || 'CODE RED (CRITICAL)';
-              this._addEvent('⚡', `[n8n DISPATCH] ${unit} en route to ${st.name} at (${st.col},${st.row}) — ETA ${eta}m`);
-              if (typeof window !== 'undefined' && typeof window.showN8nDispatchToast === 'function') {
-                window.showN8nDispatchToast({
-                  targetName: `${st.name} (${st.col},${st.row})`,
-                  col: st.col,
-                  row: st.row,
-                  confidence: (st.confidence * 100).toFixed(1),
-                  unit: unit,
-                  eta: eta,
-                  priority: priority,
-                });
-              }
-            });
-          }
         } else if (targetConf >= 0.20 || minDist <= 4.5) {
           st.status = 'CONVERGING';
           st.solidifyTicks = 0;
@@ -904,18 +704,6 @@ export class Swarm {
             st.solidifyTicks = 0;
             this.survivorsExtracted++;
             this.missionScore += 500; // +500 PTS Mission Score!
-
-            if (typeof window !== 'undefined' && typeof window.showN8nDispatchToast === 'function') {
-              window.showN8nDispatchToast({
-                targetName: `${st.name} [EXTRACTED]`,
-                col: st.col,
-                row: st.row,
-                confidence: '100.0',
-                unit: 'GROUND MEDICAL EVAC COMPLETED',
-                eta: 0.0,
-                priority: 'RESCUE COMPLETE',
-              });
-            }
 
             // ATTENTION SHIFT: Clear local attraction so gradient pulls swarm to remaining targets
             this.field.clearLocalAttraction(st.col, st.row, 4.0);
@@ -1067,45 +855,11 @@ export class Swarm {
             this._addEvent('🎯', `Multi-drone consensus! (${maxUniqueCorroboration} unique drones corroborating sector)`);
           }
         }
-
-    // Periodic Beeceptor Cloud Telemetry & HIL Ingress Polling
-    if (this.tick % 60 === 0) {
-      beeceptor.logTelemetry({
-        activeDrones: this.drones.length,
-        mapExploredPct: this.stats.mapExploredPct,
-        survivorsExtracted: this.survivorsExtracted,
-        decoysRejected: this.stats.decoysRejected || 0,
-      });
-
-      beeceptor.checkHILOverride((override) => {
-        if (override.action === 'INJECT_HAZARD') {
-          const c = override.sector_col ?? 10;
-          const r = override.sector_row ?? 12;
-          this.field.deposit(c, r, 0.9, 'HIL_OVERRIDE', 0.1, 0.8);
-          this._addEvent('⚠️', `[BEECEPTOR HIL] External Hazard Injected at (${c}, ${r})! Swarm re-routing.`);
-        } else if (override.action === 'INJECT_DECOY') {
-          const c = override.sector_col ?? 8;
-          const r = override.sector_row ?? 8;
-          this._addEvent('🔥', `[BEECEPTOR HIL] External Thermal Decoy Injected at (${c}, ${r})! Verification active.`);
-        }
-      });
-    }
-  }
+      }
 
   _addEvent(icon, text) {
     this.eventLog.unshift({ tick: this.tick, icon, text });
     if (this.eventLog.length > this._maxEvents) this.eventLog.pop();
-
-    // Stream high-priority SAR Incidents to Beeceptor Cloud Proxy
-    if (icon === '🚨' || icon === '🏆' || icon === '🙅' || icon === '🤖' || icon === '🏛️') {
-      beeceptor.logIncident({
-        tick: this.tick,
-        icon,
-        summary: text,
-        active_drones: this.drones.length,
-        survivors_found: this.survivorsExtracted || 0,
-      });
-    }
   }
 
   /**
@@ -1131,7 +885,6 @@ export class Swarm {
     if (!this._activeNOOASectors) this._activeNOOASectors = new Set();
     this._activeNOOASectors.add(sectorKey);
     this._nooaInFlightCount = (this._nooaInFlightCount || 0) + 1;
-    this.nooaStats.accessCount = (this.nooaStats.accessCount || 0) + 1;
 
     const peerAngles = localPeers.map(p => p.heading);
     const controller = new AbortController();
@@ -1159,18 +912,6 @@ export class Swarm {
         setTimeout(() => this._activeNOOASectors.delete(sectorKey), 3000); // 3s cooldown
 
         if (data && data.is_valid && data.decision) {
-          this.nooaStats.successCount = (this.nooaStats.successCount || 0) + 1;
-          this.nooaStats.lastDecision = data.decision;
-
-          beeceptor.logNOOADebate({
-            lead_agent: proposer.callsign,
-            sector: `(${col}, ${row})`,
-            decision: data.decision,
-            confidence: data.confidence,
-            channel_alignment: data.channel_alignment,
-            reasoning: data.reasoning,
-            peer_angles: peerAngles,
-          });
           if (data.decision === 'CONFIRM') {
             this._addEvent('🤖', `[NOOA NEGOTIATOR] ${data.reasoning}`);
             this.field.deposit(col, row, 0.40, proposer.id, data.confidence, 0.05);
