@@ -20,24 +20,31 @@ except ImportError:
 
 
 def compute_confidence(camera: float, audio: float, thermal: float, gas: float = 0.0) -> float:
-    W_CAMERA = 0.40
-    W_AUDIO = 0.40
-    W_THERMAL = 0.20
+    """
+    Computes posterior probability via Bayesian log-odds likelihood ratio fusion.
+    Matches uncertainty.js formulation identically.
+    """
+    LOG_ODDS_PRIOR = -2.20
+    NOISE_FLOOR = 0.10
+
+    def channel_log_lr(reading: float, true_rate: float, false_rate: float) -> float:
+        if reading < NOISE_FLOOR:
+            return math.log((1.0 - true_rate) / (1.0 - false_rate))
+        p_given_survivor = true_rate * reading + (1.0 - true_rate) * 0.05
+        p_given_no_survivor = false_rate * reading + (1.0 - false_rate) * 0.05
+        return math.log(p_given_survivor / p_given_no_survivor)
 
     passive = max(thermal, gas)
-    raw = W_CAMERA * camera + W_AUDIO * audio + W_THERMAL * passive
+    log_odds = LOG_ODDS_PRIOR
+    log_odds += channel_log_lr(camera, 0.85, 0.08)
+    log_odds += channel_log_lr(audio, 0.80, 0.15)
+    log_odds += channel_log_lr(passive, 0.70, 0.30)
 
-    active_channels = sum(1 for v in [camera, audio, passive] if v > 0.28)
-    if active_channels == 1:
-        consistency = 0.55
-    elif active_channels == 2:
-        consistency = 0.95
-    elif active_channels >= 3:
-        consistency = 1.25
-    else:
-        consistency = 0.45
-
-    return min(1.0, max(0.0, raw * consistency))
+    if log_odds > 20:
+        return 1.0
+    if log_odds < -20:
+        return 0.0
+    return 1.0 / (1.0 + math.exp(-log_odds))
 
 
 class TestSensorFusion(unittest.TestCase):
