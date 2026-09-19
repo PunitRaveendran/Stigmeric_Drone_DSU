@@ -671,35 +671,37 @@ export class Swarm {
         st.confidence = 1.0;
         st.solidifyTicks = 0;
       } else {
-        const distToDrones = this.drones.map(d => Math.hypot(d.col - st.col, d.row - st.row));
+        const distToDrones = this.drones.map(d => Math.hypot(d.x - (st.col + 0.5), d.y - (st.row + 0.5)));
         const minDist = distToDrones.length > 0 ? Math.min(...distToDrones) : 999;
-        const localDrones = distToDrones.filter(d => d <= 3.8).length;
-        const cellUnique = Math.max(this.field.getLocalUniqueDroneCount(st.col, st.row, 1), localDrones);
+        const closeDrones = distToDrones.filter(d => d <= 1.6).length;
+        const nearbyDrones = distToDrones.filter(d => d <= 3.0).length;
+        const cellUnique = this.field.getLocalUniqueDroneCount(st.col, st.row, 1);
         const cellStrength = this.field.getLocalMaxStrength(st.col, st.row, 1);
 
         let targetConf = 0.0;
-        if (localDrones >= 1 || cellUnique >= 1 || cellStrength > 0.15) {
-          const proximityBonus = minDist <= 2.0 ? 0.20 : minDist <= 3.8 ? 0.10 : 0.0;
-          targetConf = Math.min(0.98, cellStrength * 0.40 + localDrones * 0.18 + cellUnique * 0.14 + proximityBonus);
-        } else {
-          targetConf = 0.0;
+        if (closeDrones >= 1 || nearbyDrones >= 1) {
+          const proxBonus = minDist <= 1.2 ? 0.35 : minDist <= 2.2 ? 0.20 : 0.05;
+          targetConf = Math.min(0.98, cellStrength * 0.35 + closeDrones * 0.25 + cellUnique * 0.15 + proxBonus);
+        } else if (cellStrength > 0.30) {
+          targetConf = Math.min(0.50, cellStrength * 0.50); // residual pheromone only gives moderate candidate confidence
         }
         st.confidence = targetConf;
 
-        if (targetConf >= 0.60 || (localDrones >= 2 && minDist <= 3.0)) {
+        // Physical proximity state transitions
+        if ((closeDrones >= 1 && targetConf >= 0.70) || (closeDrones >= 2 && targetConf >= 0.55)) {
           st.status = 'RESCUE_DISPATCH';
           st.solidifyTicks = (st.solidifyTicks || 0) + 1;
-        } else if (targetConf >= 0.20 || minDist <= 4.5) {
+        } else if (nearbyDrones >= 1 || targetConf >= 0.30) {
           st.status = 'CONVERGING';
-          st.solidifyTicks = 0;
+          st.solidifyTicks = Math.max(0, (st.solidifyTicks || 0) - 2); // decay lock if drones move away
         } else {
           st.status = 'SEARCHING';
           st.solidifyTicks = 0;
         }
 
         // PER-TARGET RESCUE EXTRACTION:
-        // When sustained rescue lock is achieved for this survivor (>= 18 ticks of rescue dispatch):
-        if (st.solidifyTicks >= 18) {
+        // Requires sustained CLOSE physical presence (minDist <= 1.6 for >= 25 ticks / ~1.6s)
+        if (st.solidifyTicks >= 25 && minDist <= 1.6) {
           if (!this.rescuedCells.has(cellKey) && !this.isSurvivorExtracted(st.col, st.row)) {
             this.rescuedCells.add(cellKey);
             st.status = 'EXTRACTED';
@@ -713,8 +715,8 @@ export class Swarm {
 
             // Release sentinels and SCATTER all nearby drones out into unexplored Fog of War
             for (const drone of this.drones) {
-              const dDist = Math.hypot(drone.col - st.col, drone.row - st.row);
-              if (dDist <= 5.0) {
+              const dDist = Math.hypot(drone.x - (st.col + 0.5), drone.y - (st.row + 0.5));
+              if (dDist <= 4.0) {
                 drone.isSentinel = false;
                 drone.sentinelTargetCol = null;
                 drone.sentinelTargetRow = null;
