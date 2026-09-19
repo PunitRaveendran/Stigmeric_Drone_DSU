@@ -212,12 +212,15 @@ export class PheromoneField {
 
   /**
    * Compute the spatial uncertainty gradient direction at a cell.
-   * Returns a unit vector { dx, dy } pointing toward neighbor cells with highest spatial uncertainty (curiosity frontier).
+   * Uses multi-scale frontier sampling (radii 1 to 6) with inverse-distance weighting
+   * so drones in explored clearings are actively pulled toward the nearest unmapped frontier.
+   * Returns a unit vector { dx, dy }.
    */
   getUncertaintyGradient(col, row) {
     let dx = 0;
     let dy = 0;
 
+    // Step 1: Check local 3x3 neighborhood
     for (let dc = -1; dc <= 1; dc++) {
       for (let dr = -1; dr <= 1; dr++) {
         if (dc === 0 && dr === 0) continue;
@@ -231,7 +234,34 @@ export class PheromoneField {
       }
     }
 
-    const mag = Math.sqrt(dx * dx + dy * dy);
+    let mag = Math.sqrt(dx * dx + dy * dy);
+
+    // Step 2: If local neighborhood is flat (e.g. inside a cleared base or mapped zone),
+    // perform multi-scale frontier search out to radius 6
+    if (mag < 0.15) {
+      dx = 0;
+      dy = 0;
+      for (let r = 2; r <= 6; r += 2) {
+        for (let dc = -r; dc <= r; dc += 2) {
+          for (let dr = -r; dr <= r; dr += 2) {
+            if (Math.abs(dc) !== r && Math.abs(dr) !== r) continue;
+            const nc = col + dc;
+            const nr = row + dr;
+            if (this._inBounds(nc, nr)) {
+              const u = this.cellUncertainty[nr * this.cols + nc];
+              if (u > 0.3) {
+                const distSq = dc * dc + dr * dr;
+                const weight = u / distSq;
+                dx += dc * weight;
+                dy += dr * weight;
+              }
+            }
+          }
+        }
+      }
+      mag = Math.sqrt(dx * dx + dy * dy);
+    }
+
     if (mag < 1e-6) return { dx: 0, dy: 0 };
     return { dx: dx / mag, dy: dy / mag };
   }
