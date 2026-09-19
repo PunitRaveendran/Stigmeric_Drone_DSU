@@ -332,10 +332,11 @@ export class Drone {
     this.viscosity = computeViscosity(this.uncertainty, this.confidence);
     this.regime    = classifyRegime(this.viscosity);
 
-    // Battery discharge governed by PINN aerodynamic & role payload ODE
-    const drain = getPINNBatteryDrain(this.role);
+    // Battery discharge governed by PINN aerodynamic V^3 & role payload ODE
+    const drain = getPINNBatteryDrain(this.role, this.currentSpeed, this.altitude);
     if (tick % 30 === 0 && this.battery > 5) {
-      this.batteryFloat = Math.max(5, this.batteryFloat - drain);
+      const safeDrain = Math.max(0, drain);
+      this.batteryFloat = Math.max(5, this.batteryFloat - safeDrain);
       this.battery = Math.round(this.batteryFloat);
     }
   }

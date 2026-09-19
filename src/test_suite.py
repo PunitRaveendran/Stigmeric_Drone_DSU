@@ -103,6 +103,38 @@ class TestNeuralModelAssets(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(base_dir, "pinn_battery.pt")), "PINN battery model missing")
         self.assertTrue(os.path.exists(os.path.join(base_dir, "pinn_pheromone.pt")), "PINN pheromone model missing")
 
+    def test_battery_pinn_v3_effect(self):
+        """PINN model must exhibit non-linear v^3 power scaling and correct role ordering."""
+        import torch
+        from train_pinns import BatteryPINN
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(base_dir, "pinn_battery.pt")
+        model = BatteryPINN()
+        model.load_state_dict(torch.load(model_path, map_location="cpu"))
+        model.eval()
+
+        def get_drain(v_val, role_idx):
+            role_vec = [0.0, 0.0, 0.0]
+            role_vec[role_idx] = 1.0
+            r = torch.tensor([role_vec], dtype=torch.float32)
+            v = torch.tensor([[v_val]], dtype=torch.float32)
+            z = torch.tensor([[0.25]], dtype=torch.float32)
+            t = torch.tensor([[0.5]], dtype=torch.float32, requires_grad=True)
+            B = model(t, v, z, r)
+            return -torch.autograd.grad(B, t)[0].item()
+
+        # Test speed-cubed scaling: sprint (v=1.5) must drain > 2.5x hover (v=0.0)
+        drain_hover = get_drain(0.0, 0)
+        drain_sprint = get_drain(1.5, 0)
+        self.assertGreater(drain_sprint, 2.5 * drain_hover, "Sprint speed must exhibit > 2.5x drain over hover")
+
+        # Test role ordering at hover: Sentinel < Scout < Relay
+        drain_sentinel = get_drain(0.0, 2)
+        drain_scout = get_drain(0.0, 0)
+        drain_relay = get_drain(0.0, 1)
+        self.assertLess(drain_sentinel, drain_scout, "Sentinel beacon power must be lower than Scout")
+        self.assertLess(drain_scout, drain_relay, "Scout power must be lower than Relay mesh forwarding")
+
 
 class TestBeeceptorGateway(unittest.TestCase):
 
