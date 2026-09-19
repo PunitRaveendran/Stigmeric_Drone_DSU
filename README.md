@@ -17,7 +17,7 @@
 
 ### 🌐 [👉 Launch Live Cloud Deployment on Render](https://protoplasm-sar-swarm.onrender.com)
 
-[Live App](https://protoplasm-sar-swarm.onrender.com) • [Features](#-key-features) • [Sponsor Tracks](#-cloud-deployment--hackathon-sponsor-tracks) • [Architecture](#-dual-axis-autonomy--system-architecture) • [Pipelines](#-system-pipelines--data-flow) • [Quickstart](#-getting-started--how-to-launch) • [Trace Commons](#-trace-commons--agent-trajectories)
+[Live App](https://protoplasm-sar-swarm.onrender.com) • [Features](#-key-features) • [Sponsor Tracks](#-cloud-deployment--hackathon-sponsor-tracks) • [Architecture](#-dual-axis-autonomy--system-architecture) • [Pipelines](#-system-pipelines--data-flow) • [Testing](#-testing--verification-suite) • [Quickstart](#-getting-started--how-to-launch)
 
 </div>
 
@@ -357,7 +357,7 @@ Protoplasm integrates enterprise cloud deployment, workflow automation, and open
 * **Standard Delivery:** Strict monorepo hygiene, declarative Docker multi-stage builds, automated validation test suites ([`src/test_suite.py`](src/test_suite.py)), and architectural documentation.
 
 ### 5. 🌐 Trace Commons Track
-* **Autonomous Agent Trajectories:** Real-time multi-agent debate logs, Byzantine fault mitigations, and stigmergic decision traces formatted for open-data submission via the Trace Commons contributor CLI.
+* **Open-Data Disaster Prototypes:** Transparent, reproducible procedural disaster floorplans, open PINN physics calibration coefficients ([`pinn_calibration.json`](pinn_calibration.json)), and MIT-licensed community disaster response tools.
 
 ---
 
@@ -404,19 +404,6 @@ Stigmeric_Drone_DSU/
 ├── requirements.txt                # Python dependencies
 └── README.md                       # Master Documentation
 ```
-
----
-
-## 🌐 Trace Commons & Agent Trajectories
-
-Protoplasm was developed using advanced agentic pair-programming workflows and produces autonomous multi-agent trajectories:
-* **Contributor Traces**: Full conversation and execution logs are stored locally in `.trajectory.jsonl` format.
-* **Trace Commons CLI Submission**:
-  ```powershell
-  trace-commons-contributor login
-  trace-commons-contributor submit
-  ```
-* **Decentralized Multi-Agent Traces**: All drone debate proposals, agreement vectors, Byzantine isolation events, and sensor fusion classifications are formatted for submission to the **Trace Commons AI Agent Commons**.
 
 ---
 
