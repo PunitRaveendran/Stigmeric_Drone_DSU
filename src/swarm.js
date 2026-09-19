@@ -70,6 +70,7 @@ export class Swarm {
     this.quarantinedDrones = new Set();
     this.securityStats = this.stats.securityStats;
     this.debateStats = this.stats.debateStats;
+    this.debateFeed = [];
     this.nooaStats = this.stats.nooaStats;
     this.relayStats = this.stats.relayStats;
 
@@ -556,6 +557,20 @@ export class Swarm {
             }
 
             this.securityStats.attacksBlocked++;
+            if (!this.debateFeed) this.debateFeed = [];
+            this.debateFeed.unshift({
+              id: `byz-${this.tick}-${sender.id}-${Date.now()}`,
+              type: 'byzantine',
+              callsign: sender.callsign,
+              icon: '🛡️',
+              badge: 'BFT BLOCKED',
+              coords: `(${msg.col}, ${msg.row})`,
+              text: `[BFT SPOOF BLOCKED] ${sender.callsign} broadcast forged C=${(msg.confidence * 100).toFixed(0)}% at (${msg.col},${msg.row}). Honest peers rejected spoof. Node quarantined.`,
+              confidence: msg.confidence,
+              tick: this.tick,
+              time: new Date().toLocaleTimeString(),
+            });
+            if (this.debateFeed.length > 200) this.debateFeed.pop();
             continue; // Drop the spoofed proposal — do not route to honest peers!
           }
         }
@@ -563,6 +578,20 @@ export class Swarm {
         // Deliver to all drones within radio range
         if (msg.type === 'CANDIDATE_PROPOSAL') {
           this.debateStats.proposals++;
+          if (!this.debateFeed) this.debateFeed = [];
+          this.debateFeed.unshift({
+            id: `prop-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
+            type: 'proposal',
+            callsign: sender.callsign,
+            icon: '📢',
+            badge: 'PROPOSAL',
+            coords: `(${msg.col}, ${msg.row})`,
+            confidence: msg.confidence,
+            text: `${sender.callsign} broadcast candidate C=${(msg.confidence * 100).toFixed(0)}% at (${msg.col},${msg.row}). Requesting peer vote verification.`,
+            tick: this.tick,
+            time: new Date().toLocaleTimeString(),
+          });
+          if (this.debateFeed.length > 200) this.debateFeed.pop();
         }
         if (sender.role === 'RELAY') {
           this.relayStats.packetsRelayed++;
@@ -649,22 +678,66 @@ export class Swarm {
           }
           const emoji = msg.vote === 'AGREE' ? '✅ YES' : '❌ NO';
           const headingDeg = Math.round((msg.heading * 180 / Math.PI + 360) % 360);
+          const reasoning = msg.vote === 'AGREE'
+            ? `YOLO Camera + YAMNet Audio confirmed at ${(msg.confidence * 100).toFixed(0)}%`
+            : `Single-channel bias only — cross-sensor mismatch from ${headingDeg}° angle`;
+
+          if (!this.debateFeed) this.debateFeed = [];
+          this.debateFeed.unshift({
+            id: `vote-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
+            type: msg.vote === 'AGREE' ? 'agree' : 'reject',
+            callsign: sender.callsign,
+            icon: emoji,
+            badge: msg.vote === 'AGREE' ? 'VOTE: AGREE' : 'VOTE: REJECT',
+            coords: `(${msg.targetCol}, ${msg.targetRow})`,
+            confidence: msg.confidence,
+            text: `${sender.callsign} [${headingDeg}° angle] voted ${msg.vote} @ (${msg.targetCol},${msg.targetRow}): "${reasoning}"`,
+            tick: this.tick,
+            time: new Date().toLocaleTimeString(),
+          });
+          if (this.debateFeed.length > 200) this.debateFeed.pop();
+
           const debateKey2 = `vote-${msg.callsign}-${msg.targetCol},${msg.targetRow}`;
           if (!this._debateLogThrottle.has(debateKey2)) {
             this._debateLogThrottle.add(debateKey2);
-            const reasoning = msg.vote === 'AGREE'
-              ? `YOLO Camera + YAMNet Audio alignment confirmed at ${(msg.confidence * 100).toFixed(0)}% confidence`
-              : `Single-channel bias only — camera/audio missing from ${headingDeg}° approach angle`;
             this._addEvent(emoji, `Agent ${msg.callsign} [${headingDeg}° angle] votes ${msg.vote} @ (${msg.targetCol},${msg.targetRow}): "${reasoning}"`);
           }
         } else if (msg.type === 'CONSENSUS_CONFIRMED') {
           this.debateStats.consensusConfirmed++;
+          if (!this.debateFeed) this.debateFeed = [];
+          this.debateFeed.unshift({
+            id: `conf-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
+            type: 'consensus',
+            callsign: sender.callsign,
+            icon: '🏛️',
+            badge: 'CONSENSUS REACHED',
+            coords: `(${msg.col}, ${msg.row})`,
+            text: `CONSENSUS CONFIRMED @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT. Target verified! Dispatching rescue.`,
+            tick: this.tick,
+            time: new Date().toLocaleTimeString(),
+          });
+          if (this.debateFeed.length > 200) this.debateFeed.pop();
+
           const debateKey3 = `consensus-${msg.col},${msg.row}`;
           if (!this._debateLogThrottle.has(debateKey3)) {
             this._debateLogThrottle.add(debateKey3);
             this._addEvent('🏛️', `DEBATE CONSENSUS @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT → Agent ${msg.callsign}: "Multi-agent consensus reached! Survivor confirmed. Requesting extraction."`);
           }
         } else if (msg.type === 'CONSENSUS_REJECTED') {
+          if (!this.debateFeed) this.debateFeed = [];
+          this.debateFeed.unshift({
+            id: `rej-${this.tick}-${sender.id}-${Math.random().toString(36).slice(2, 6)}`,
+            type: 'reject',
+            callsign: sender.callsign,
+            icon: '🙅',
+            badge: 'DECOY REJECTED',
+            coords: `(${msg.col}, ${msg.row})`,
+            text: `CONSENSUS REJECTED @ (${msg.col},${msg.row}): ${msg.agrees} AGREE vs ${msg.rejects} REJECT. Decoy anomaly dismissed. Clearing trail.`,
+            tick: this.tick,
+            time: new Date().toLocaleTimeString(),
+          });
+          if (this.debateFeed.length > 200) this.debateFeed.pop();
+
           const debateKey4 = `rejected-${msg.col},${msg.row}`;
           if (!this._debateLogThrottle.has(debateKey4)) {
             this._debateLogThrottle.add(debateKey4);
