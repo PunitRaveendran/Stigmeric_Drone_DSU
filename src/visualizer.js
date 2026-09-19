@@ -20,12 +20,12 @@ import { SPREAD_MAX, SOLIDIFY_MIN } from './uncertainty.js';
 // ─── Color palette ────────────────────────────────────────────────────────────
 
 const PALETTE = {
-  bg:            '#060a14',
-  field0:        [8,   18,  55],     // deep indigo (unexplored)
+  bg:            '#000000',
+  field0:        [10,  10,  10],     // neutral dark (unexplored)
   field1:        [255, 100, 20],     // warm orange (medium confidence)
   field2:        [255, 240, 160],    // bright warm white (high confidence)
-  gridLine:      'rgba(255,255,255,0.025)',
-  regimeSpread:   '#4cc9f0',
+  gridLine:      'rgba(255,255,255,0.03)',
+  regimeSpread:   '#ffffff',
   regimeConverge: '#ffd60a',
   regimeSolidify: '#ff4d6d',
 };
@@ -159,23 +159,23 @@ export class Visualizer {
     // ── Update smooth display field ──────────────────────────────────────
     this._updateDisplayField();
 
-    // ── 1. Background + Satellite Imagery + Vignette ──────────────────────
-    ctx.fillStyle = PALETTE.bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    // ── 1. Background + Satellite Map Transparency + Vignette ────────────
     if (this.showSatelliteMode) {
-      this._drawSatelliteTerrain(ctx, cols, rows, cs, ox, oy);
+      // Clear canvas so MapLibre GL JS live satellite map renders underneath
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle edge vignette to blend satellite terrain into floating dark panels
+      const vcx = canvas.width / 2, vcy = canvas.height / 2;
+      const vg = ctx.createRadialGradient(vcx, vcy, Math.min(canvas.width, canvas.height) * 0.32, vcx, vcy, Math.max(canvas.width, canvas.height) * 0.72);
+      vg.addColorStop(0, 'transparent');
+      vg.addColorStop(1, 'rgba(0, 0, 0, 0.65)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     } else {
+      ctx.fillStyle = PALETTE.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       this._drawNoiseBackground(ctx, canvas);
     }
-
-    // Vignette
-    const vcx = canvas.width / 2, vcy = canvas.height / 2;
-    const vg = ctx.createRadialGradient(vcx, vcy, 0, vcx, vcy, Math.max(canvas.width, canvas.height) * 0.7);
-    vg.addColorStop(0, 'transparent');
-    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // ── 2. Pheromone heatmap (offscreen + bloom) ─────────────────────────
     this._drawHeatmap(ctx, cols, rows, cs, ox, oy);

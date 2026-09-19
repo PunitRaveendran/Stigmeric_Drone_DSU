@@ -42,3 +42,9 @@ venv.bak/
 
 # Local benchmark dumps
 benchmark_raw_results.json
+
+# Node & Build artifacts
+node_modules/
+dist/
+.vite/
+*.local
