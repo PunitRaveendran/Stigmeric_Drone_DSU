@@ -192,34 +192,7 @@ except Exception as e:
         'EMPTY': (0.0500, 0.9500),
     }
 
-# ─── 4. Phase 3: Bayesian Log-Odds Sensor Fusion & Profile Compilation ─────────
-import math
-
-def compute_bayesian_confidence(camera: float, audio: float, passive: float) -> float:
-    """
-    Computes posterior probability via Bayesian log-odds likelihood ratio fusion.
-    Matches uncertainty.js formulation identically.
-    """
-    LOG_ODDS_PRIOR = -2.20
-    NOISE_FLOOR = 0.10
-
-    def channel_log_lr(reading: float, true_rate: float, false_rate: float) -> float:
-        if reading < NOISE_FLOOR:
-            return math.log((1.0 - true_rate) / (1.0 - false_rate))
-        p_given_survivor = true_rate * reading + (1.0 - true_rate) * 0.05
-        p_given_no_survivor = false_rate * reading + (1.0 - false_rate) * 0.05
-        return math.log(p_given_survivor / p_given_no_survivor)
-
-    log_odds = LOG_ODDS_PRIOR
-    log_odds += channel_log_lr(camera, 0.85, 0.08)
-    log_odds += channel_log_lr(audio, 0.80, 0.15)
-    log_odds += channel_log_lr(passive, 0.70, 0.30)
-
-    if log_odds > 20:
-        return 1.0
-    if log_odds < -20:
-        return 0.0
-    return 1.0 / (1.0 + math.exp(-log_odds))
+# ─── 4. Phase 3: Raw Neural Model Profile Compilation ─────────────────────────
 
 passive_thermal = {
     'SURVIVOR': 0.7800,
@@ -232,22 +205,17 @@ for ct in ['SURVIVOR', 'HOT_DEBRIS', 'WIND_NOISE', 'EMPTY']:
     y_val = yolo_results[ct]
     yh_val, yo_val = yamnet_results[ct]
     p_val = passive_thermal[ct]
-    c_fused = compute_bayesian_confidence(y_val, yh_val, p_val)
-    decision = "HIGH-CONFIDENCE HUMAN" if c_fused >= 0.75 else ("VERIFY WITH OTHER DRONES" if c_fused >= 0.40 else "NO HUMAN")
 
     inference_cache[ct] = {
         'yolo': round(y_val, 4),
         'yamnet_human': round(yh_val, 4),
         'yamnet_other': round(yo_val, 4),
         'passive_thermal': p_val,
-        'trimodal_C': round(c_fused, 4),
-        'decision': decision,
     }
 
 inference_cache['SURVIVOR']['model_info'] = {
     'yolo_model': 'human_detector.pt (YOLOv8 custom-trained)',
     'yamnet_model': 'yamnet_binary_final (TF SavedModel fine-tuned)',
-    'formula': 'P(survivor|r) = sigmoid(logOdds_prior + sum(ln(LR_i)))',
 }
 
 # ─── 4b. Phase 4: Physics-Informed Neural Network (PINN) Loading ───────────────
@@ -316,13 +284,13 @@ def evaluate_pinn_drain(v_val=1.0, z_val=0.25, role_name="Scout", t_val=0.5):
 
 # ─── Summary ──────────────────────────────────────────────────────────────────
 print("\n" + "=" * 70)
-print("CALIBRATED INFERENCE PROFILES SUMMARY (Bayesian Log-Odds Posterior)")
+print("RAW NEURAL MODEL FORWARD PASS OUTPUTS (CALIBRATION BASELINE)")
 print("=" * 70)
-print(f"{'Cell Type':<16} {'YOLO':>8} {'YAMNet':>8} {'Passive':>8} {'P_Bayes':>8} {'Decision':<25}")
+print(f"{'Cell Type':<16} {'YOLOv8':>10} {'YAMNet':>10} {'Passive':>10}")
 print("-" * 70)
 for ct in ['SURVIVOR', 'HOT_DEBRIS', 'WIND_NOISE', 'EMPTY']:
     d = inference_cache[ct]
-    print(f"{ct:<16} {d['yolo']:>8.4f} {d['yamnet_human']:>8.4f} {d['passive_thermal']:>8.4f} {d['trimodal_C']:>8.4f} {d['decision']:<25}")
+    print(f"{ct:<16} {d['yolo']:>10.4f} {d['yamnet_human']:>10.4f} {d['passive_thermal']:>10.4f}")
 print("=" * 70)
 
 # ─── 5. DualStack HTTP Server ─────────────────────────────────────────────────
