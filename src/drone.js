@@ -30,39 +30,39 @@ import { getPINNBatteryDrain } from './pinn.js';
 const REGIME_PARAMS = {
   SPREAD: {
     gradientPull:  0.0,    // Pure exploration: ignore weak trails to prevent circular tail-chasing
-    randomWeight:  0.40,   // smooth wander
-    speed:         0.36,   // brisk sweeping speed
-    depositAmount: 0.02,   // light trail
-    stepScale:     0.18,   // smooth step scale
-    turnRate:      0.015,  // gentle turns — eliminates tight spinning circles
-    inertia:       0.80,   // high forward momentum across grid sectors
+    randomWeight:  0.35,   // Smooth tactical search wandering
+    speed:         0.54,   // Realistic tactical cruise thrust (~5.5 - 7.0 m/s / 20 - 25 km/h)
+    depositAmount: 0.02,   // Light exploration trail
+    stepScale:     0.28,   // Physical step scaling for ~5.8 m/s ground speed
+    turnRate:      0.020,  // Smooth aerodynamic sweeping arcs
+    inertia:       0.82,   // High forward momentum across search bays
   },
   CONVERGE: {
-    gradientPull:  0.80,   // strong attraction toward survivor signal center
-    randomWeight:  0.20,   // focused movement toward target
-    speed:         0.20,   // slowing down as swarm re-verifies
-    depositAmount: 0.12,   // heavy trail reinforcement
-    stepScale:     0.09,
-    turnRate:      0.03,
-    inertia:       0.72,
+    gradientPull:  0.80,   // Strong attraction toward survivor candidate
+    randomWeight:  0.15,   // Focused deceleration toward target
+    speed:         0.32,   // Slow survey speed (~2.0 - 3.0 m/s) as swarm re-verifies
+    depositAmount: 0.12,   // Heavy trail reinforcement
+    stepScale:     0.15,
+    turnRate:      0.035,
+    inertia:       0.74,
   },
   SOLIDIFY: {
-    gradientPull:  0.95,   // lock onto survivor center
-    randomWeight:  0.05,   // minimal wander — swarm holds position
-    speed:         0.12,   // slow hover over target
-    depositAmount: 0.20,   // intense trail lock
-    stepScale:     0.07,
+    gradientPull:  0.95,   // Lock onto survivor center
+    randomWeight:  0.05,   // Minimal wander — swarm holds position
+    speed:         0.10,   // Station-keeping hover over target (<0.5 m/s)
+    depositAmount: 0.20,   // Intense trail lock
+    stepScale:     0.05,
     turnRate:      0.01,
     inertia:       0.85,
   },
   RESCUED: {
     gradientPull:  0.0,
     randomWeight:  0.0,
-    speed:         0.32,   // transit RTL speed
-    depositAmount: 0.0,   // no pheromone deposit during RTL flight
-    stepScale:     0.13,
-    turnRate:      0.02,
-    inertia:       0.80,
+    speed:         0.50,   // Rapid transit RTL speed (~4.8 - 5.5 m/s)
+    depositAmount: 0.0,   // No pheromone deposit during RTL flight
+    stepScale:     0.25,
+    turnRate:      0.025,
+    inertia:       0.82,
   },
 };
 
@@ -332,10 +332,11 @@ export class Drone {
     this.viscosity = computeViscosity(this.uncertainty, this.confidence);
     this.regime    = classifyRegime(this.viscosity);
 
-    // Battery discharge governed by PINN aerodynamic & role payload ODE
-    const drain = getPINNBatteryDrain(this.role);
+    // Battery discharge governed by PINN aerodynamic V^3 & role payload ODE
+    const drain = getPINNBatteryDrain(this.role, this.currentSpeed, this.altitude);
     if (tick % 30 === 0 && this.battery > 5) {
-      this.batteryFloat = Math.max(5, this.batteryFloat - drain);
+      const safeDrain = Math.max(0, drain);
+      this.batteryFloat = Math.max(5, this.batteryFloat - safeDrain);
       this.battery = Math.round(this.batteryFloat);
     }
   }
@@ -561,7 +562,7 @@ export class Drone {
     // Inward soft boundary potential field (steers drones away from borders BEFORE wall collision)
     let bSteerX = 0;
     let bSteerY = 0;
-    const bMargin = 1.5; // small margin — just enough to prevent wall collision, not block entire bottom region
+    const bMargin = 1.8; // tuned for realistic 5.5 - 7.0 m/s flight speed margin
     if (this.x < bMargin)              bSteerX += (bMargin - this.x) * 2.5;
     if (this.x > field.cols - bMargin) bSteerX -= (this.x - (field.cols - bMargin)) * 2.5;
     if (this.y < bMargin)              bSteerY += (bMargin - this.y) * 2.5;

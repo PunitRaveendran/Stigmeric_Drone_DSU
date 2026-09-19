@@ -523,17 +523,19 @@ export class Swarm {
       }
 
       for (const msg of sender.outbox) {
-        // Track attack metrics: forged candidate proposals or rogue spoofing
-        const isMalicious = msg.isForged || (sender.isRogue && (msg.type === 'CANDIDATE_PROPOSAL' || msg.confidence >= 0.70));
+        const actualType = (msg.col !== undefined && msg.row !== undefined)
+          ? this.sensors.scenario.getCellType(msg.col, msg.row)
+          : null;
+        const isRealSurvivor = (actualType === 'SURVIVOR');
+
+        // Track attack metrics: forged candidate proposals or rogue spoofing at non-survivor cells
+        const isMalicious = msg.isForged || (sender.isRogue && msg.type === 'CANDIDATE_PROPOSAL' && !isRealSurvivor && msg.confidence >= 0.70);
         if (isMalicious) {
           this.securityStats.attacksAttempted++;
         }
 
         // ═══ BYZANTINE SPOOFING DETECTION & QUARANTINE ═══
         if (msg.type === 'CANDIDATE_PROPOSAL' && this.byzantineDefenseEnabled) {
-          const actualType = this.sensors.scenario.getCellType(msg.col, msg.row);
-          const isRealSurvivor = (actualType === 'SURVIVOR');
-
           // Adversarial check: forged Byzantine payload or claiming high confidence at a non-survivor cell
           if (msg.isForged || (!isRealSurvivor && msg.confidence >= 0.70)) {
             sender.securityViolations = (sender.securityViolations || 0) + 1;
