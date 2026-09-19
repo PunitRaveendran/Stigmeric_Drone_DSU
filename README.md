@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Render Cloud](https://img.shields.io/badge/Render-Live%20Deployment-46e3b7?style=flat&logo=render&logoColor=white)](https://protoplasm-sar-swarm.onrender.com)
 [![React 19](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev/)
 [![Vite 6](https://img.shields.io/badge/Vite-6.0-646cff.svg)](https://vitejs.dev/)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11%2B-3776ab.svg)](https://www.python.org/)
@@ -11,11 +11,13 @@
 [![YAMNet Audio](https://img.shields.io/badge/YAMNet-Acoustic%20Inference-ff6f00.svg)](https://www.tensorflow.org/)
 [![MapLibre GL](https://img.shields.io/badge/MapLibre%20GL-Satellite%20Tactical-396.svg)](https://maplibre.org/)
 [![NVIDIA NOOA](https://img.shields.io/badge/NVIDIA-NOOA%20Nemotron-76B900.svg)](https://build.nvidia.com)
-[![DSU DevHack 3.0](https://img.shields.io/badge/DSU%20DevHack-3.0%20Track-blueviolet.svg)](https://dsudevhack3.tech)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **A decentralized, bio-inspired multi-agent drone swarm simulation for Search and Rescue (SAR) in degraded, GPS/communication-denied disaster environments.**
 
-[Features](#-key-features) • [Architecture](#-dual-axis-autonomy--system-architecture) • [Pipelines](#-system-pipelines--data-flow) • [UI Walkthrough](#-mission-control-gui-walkthrough) • [Math Foundations](#-mathematical-foundations) • [Quickstart & Launch](#-getting-started--how-to-launch) • [Trace Commons](#-trace-commons--agent-trajectories)
+### 🌐 [👉 Launch Live Cloud Deployment on Render](https://protoplasm-sar-swarm.onrender.com)
+
+[Live App](https://protoplasm-sar-swarm.onrender.com) • [Features](#-key-features) • [Sponsor Tracks](#-cloud-deployment--hackathon-sponsor-tracks) • [Architecture](#-dual-axis-autonomy--system-architecture) • [Pipelines](#-system-pipelines--data-flow) • [Quickstart](#-getting-started--how-to-launch) • [Trace Commons](#-trace-commons--agent-trajectories)
 
 </div>
 
@@ -309,7 +311,7 @@ Open your browser and navigate to:
 ## 🧪 Testing & Verification Suite
 
 ```bash
-# 1. Run automated Python unit test suite
+# 1. Run automated Python unit test suite (12 tests across Swarm, PINNs, BFT, & Cloud Gateways)
 python src/test_suite.py
 
 # 2. Run 100-trial Monte Carlo benchmark across all conditions
@@ -325,29 +327,37 @@ python src/train_pinns.py
 npm run build
 ```
 
+---
+
 ## 🚀 Cloud Deployment & Hackathon Sponsor Tracks
 
-Protoplasm integrates enterprise cloud deployment, workflow automation, and open-data standards across 5 hackathon tracks:
+Protoplasm integrates enterprise cloud deployment, workflow automation, and open-data standards across all 5 hackathon tracks:
 
-### 1. ☁️ Render Cloud Deployment Track
-* **Infrastructure-as-Code (IaC):** [`render.yaml`](render.yaml) defines a zero-configuration Render Blueprint.
-* **Unified Multi-Stage Dockerfile:** [`Dockerfile`](Dockerfile) builds the React 19/Vite web application in Stage 1, packages the lightweight CPU PyTorch and Python ML backend in Stage 2, and runs the unified service on port `10000`.
-* **Health & Liveness Probes:** Exposes `/api/health` for automated zero-downtime healthchecks on Render Cloud.
-* **1-Click Deploy:** Connect repository at [dashboard.render.com](https://dashboard.render.com) → Click **New +** → **Blueprint** → Select `Stigmeric_Drone_DSU` → Apply!
+### 1. ☁️ Render Cloud Deployment Track (Live Full-Stack)
+* **Live Deployment URL:** **[`https://protoplasm-sar-swarm.onrender.com`](https://protoplasm-sar-swarm.onrender.com)**
+* **Infrastructure-as-Code (IaC):** [`render.yaml`](render.yaml) defines a zero-configuration Render Blueprint managing the service lifecycle.
+* **Unified Multi-Stage Dockerfile:** [`Dockerfile`](Dockerfile) leverages `node:20-slim` in Stage 1 to build the Vite React 19 SPA, and `python:3.11-slim` in Stage 2 with CPU-only PyTorch to host the unified application and ML inference microservice on port `10000`.
+* **Zero-Downtime Continuous Deployment (CD):** Every commit pushed to `main` automatically triggers Render’s webhook, building and rolling out the latest container with automated rollback protection.
+* **Live Microservice Endpoints:**
+  * `GET /`: Serves the tactical satellite mission control dashboard.
+  * `GET /api/health`: Automated healthcheck probe (`{"status": "ok", "yolo": true, ...}`).
+  * `GET /api/inference`: Returns calibrated YOLOv8 & YAMNet tri-modal class-conditional distributions.
+  * `GET /api/pinn/pheromone`: PINN Reaction-Diffusion PDE coefficients.
+  * `GET /api/pinn/battery`: PINN Parasitic Drag & Battery Discharge ODE parameters.
 
 ### 2. 🐝 Beeceptor API & Agent Mocking Track
-* **HIL Simulation:** [`src/beeceptor.js`](src/beeceptor.js) streams real-time swarm telemetry and incident reports to Beeceptor Cloud (`https://stigmericdrone.proxy.beeceptor.com`).
-* **Interactive Inspection:** Live traffic inspection console available at [beeceptor.com/console/stigmericdrone](https://beeceptor.com/console/stigmericdrone).
+* **Hardware-in-the-Loop (HIL) Proxy:** [`src/beeceptor.js`](src/beeceptor.js) streams live swarm telemetry, drone battery reserves, and survivor discovery events to [`https://stigmericdrone.proxy.beeceptor.com`](https://stigmericdrone.proxy.beeceptor.com).
+* **Live Traffic Console:** Publicly inspectable live traffic feed accessible at [beeceptor.com/console/stigmericdrone](https://beeceptor.com/console/stigmericdrone).
 
 ### 3. ⚡ n8n Automation Track
-* **Emergency Dispatch Gateway:** [`src/n8n.js`](src/n8n.js) triggers autonomous multi-step incident triage pipelines on [dronedsu.app.n8n.cloud](https://dronedsu.app.n8n.cloud).
-* **Automated Webhooks:** Direct payload dispatch for code-red survivor extraction events and automated responder notifications.
+* **Emergency Dispatch Gateway:** [`src/n8n.js`](src/n8n.js) triggers autonomous multi-step incident triage workflows on [dronedsu.app.n8n.cloud](https://dronedsu.app.n8n.cloud/webhook/sar-dispatch).
+* **Automated Webhooks:** Direct payload dispatch when a survivor is confirmed by multi-agent debate, routing code-red GPS coordinates to automated responder notification pipelines.
 
 ### 4. 🐙 GitHub Developer Track (Title Sponsor)
-* **Standard Delivery:** Monorepo commit hygiene, semantic release tags, automated test validation (`src/test_suite.py`), and architectural documentation.
+* **Standard Delivery:** Strict monorepo hygiene, declarative Docker multi-stage builds, automated validation test suites ([`src/test_suite.py`](src/test_suite.py)), and architectural documentation.
 
 ### 5. 🌐 Trace Commons Track
-* **Autonomous Agent Trajectories:** Multi-agent debate logs, Byzantine fault mitigations, and stigmergic decision traces formatted for the Trace Commons open dataset.
+* **Autonomous Agent Trajectories:** Real-time multi-agent debate logs, Byzantine fault mitigations, and stigmergic decision traces formatted for open-data submission via the Trace Commons contributor CLI.
 
 ---
 
