@@ -17,7 +17,7 @@
 
 ### 🌐 [👉 Launch Live Cloud Deployment on Render](https://protoplasm-sar-swarm.onrender.com)
 
-[Live App](https://protoplasm-sar-swarm.onrender.com) • [Features](#-key-features) • [Sponsor Tracks](#-cloud-deployment--hackathon-sponsor-tracks) • [Architecture](#-dual-axis-autonomy--system-architecture) • [Pipelines](#-system-pipelines--data-flow) • [Testing](#-testing--verification-suite) • [Quickstart](#-getting-started--how-to-launch)
+[Live App](https://protoplasm-sar-swarm.onrender.com) • [Features](#-key-features) • [System Architecture](SYSTEM_README.md) • [Math Deep-Dive](math_readme.md) • [Naive Bayes Engine](NAIVE_BAYES_README.md) • [Sponsor Tracks](#-cloud-deployment--hackathon-sponsor-tracks) • [Pipelines](#-system-pipelines--data-flow) • [Testing](#-testing--verification-suite) • [Quickstart](#-getting-started--how-to-launch)
 
 </div>
 
